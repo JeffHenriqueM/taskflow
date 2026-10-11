@@ -1441,3 +1441,144 @@ textarea {
   justify-content: center;
 }
 
+/* ==========================================
+   Botão e Modal: Escolher Aleatoriamente
+   ========================================== */
+.btn-random {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.btn-random:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #4338ca 100%);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+.btn-random:active {
+  transform: translateY(0);
+}
+
+.random-dice-icon {
+  display: inline-block;
+  font-size: 15px;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-random:hover .random-dice-icon {
+  transform: rotate(180deg) scale(1.2);
+}
+
+.random-modal-card {
+  max-width: 480px;
+}
+
+.random-modal-icon {
+  background: rgba(124, 58, 237, 0.2);
+  color: #c4b5fd;
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.4);
+  animation: rollDice 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes rollDice {
+  0% { transform: rotate(-180deg) scale(0.6); opacity: 0; }
+  70% { transform: rotate(20deg) scale(1.15); }
+  100% { transform: rotate(0) scale(1); opacity: 1; }
+}
+
+.random-picked-card {
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-left: 5px solid #8b5cf6;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 16px 0 20px;
+  text-align: left;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.random-picked-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.random-picked-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.random-picked-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.random-time-badge {
+  background: rgba(124, 58, 237, 0.25);
+  color: #ddd6fe;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.random-picked-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.random-info-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Efeito de destaque luminoso na tarefa sorteada */
+.task-card.highlight-picked,
+.task-item.highlight-picked {
+  animation: glowPicked 3s ease-out;
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 28px rgba(139, 92, 246, 0.55) !important;
+}
+
+@keyframes glowPicked {
+  0% {
+    transform: scale(1.025);
+    box-shadow: 0 0 35px rgba(139, 92, 246, 0.85);
+    border-color: #c4b5fd;
+  }
+  25% {
+    transform: scale(1.015);
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.65);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: var(--shadow-sm);
+  }
+}
+

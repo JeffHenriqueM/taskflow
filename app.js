@@ -233,8 +233,18 @@ const timerConfigTaskTitle = document.getElementById('timerConfigTaskTitle');
 const customMinutesInput = document.getElementById('customMinutesInput');
 const btnSaveCustomMinutes = document.getElementById('btnSaveCustomMinutes');
 
+// Modal e Botão de Escolha Aleatória
+const btnPickRandomTask = document.getElementById('btnPickRandomTask');
+const randomTaskModal = document.getElementById('randomTaskModal');
+const randomModalSubtitle = document.getElementById('randomModalSubtitle');
+const randomPickedCard = document.getElementById('randomPickedCard');
+const btnStartRandomTask = document.getElementById('btnStartRandomTask');
+const btnRerollRandomTask = document.getElementById('btnRerollRandomTask');
+const btnCloseRandomModal = document.getElementById('btnCloseRandomModal');
+
 let currentConfiguringTaskId = null;
 let currentFinishedTaskId = null;
+let currentRandomChosenTaskId = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -523,6 +533,38 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Ações do Sorteio Aleatório de Tarefas
+  if (btnPickRandomTask) {
+    btnPickRandomTask.addEventListener('click', pickRandomTask);
+  }
+
+  if (btnStartRandomTask) {
+    btnStartRandomTask.addEventListener('click', () => {
+      if (currentRandomChosenTaskId) {
+        const id = currentRandomChosenTaskId;
+        closeRandomTaskModal();
+        startTimer(id);
+        highlightAndScrollToTask(id);
+      }
+    });
+  }
+
+  if (btnRerollRandomTask) {
+    btnRerollRandomTask.addEventListener('click', () => {
+      pickRandomTask();
+    });
+  }
+
+  if (btnCloseRandomModal) {
+    btnCloseRandomModal.addEventListener('click', () => {
+      const id = currentRandomChosenTaskId;
+      closeRandomTaskModal();
+      if (id) {
+        highlightAndScrollToTask(id);
+      }
+    });
+  }
 }
 
 // Alternância entre Hoje e Histórico
@@ -695,6 +737,104 @@ function resetTimer(taskId) {
       dbUpsertTask(task);
     }
   }
+}
+
+// ==========================================
+// Sorteio Aleatório de Tarefas (Menor Tempo de Execução)
+// ==========================================
+
+function getTaskExecutionTime(task) {
+  // O tempo de execução da tarefa é o tempo restante na contagem regressiva
+  // Se ainda não começou, corresponde à duração total configurada (targetSeconds)
+  const remaining = getTaskRemainingSeconds(task);
+  return remaining > 0 ? remaining : getTaskTargetSeconds(task);
+}
+
+function pickRandomTask() {
+  const pendingTasks = tasks.filter(t => !t.completed);
+
+  if (pendingTasks.length === 0) {
+    alert('🎉 Parabéns! Todas as tarefas da rotina de hoje já foram concluídas!');
+    return;
+  }
+
+  // Se o filtro ativo for 'completed', alterna para 'all' para que a tarefa sorteada fique visível
+  if (activeFilter === 'completed') {
+    activeFilter = 'all';
+    filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
+    renderTasks();
+  }
+
+  // 1. Encontra o menor tempo de execução entre todas as tarefas pendentes (em segundos)
+  const minTime = Math.min(...pendingTasks.map(t => getTaskExecutionTime(t)));
+
+  // 2. Filtra todas as tarefas candidatas que empatam com esse menor tempo
+  const candidates = pendingTasks.filter(t => getTaskExecutionTime(t) === minTime);
+
+  // 3. Escolhe aleatoriamente entre as candidatas de menor tempo
+  const randomIndex = Math.floor(Math.random() * candidates.length);
+  const chosenTask = candidates[randomIndex];
+
+  currentRandomChosenTaskId = chosenTask.id;
+  showRandomTaskModal(chosenTask, minTime, candidates.length);
+}
+
+function showRandomTaskModal(task, minSeconds, totalCandidates) {
+  if (!randomTaskModal || !randomPickedCard) return;
+
+  const minMinutes = Math.max(1, Math.round(minSeconds / 60));
+  const subtasks = task.subtasks || [];
+  const completedSubs = subtasks.filter(s => s.completed).length;
+
+  randomPickedCard.innerHTML = `
+    <div class="random-picked-header">
+      <div class="random-picked-title">${escapeHtml(task.title)}</div>
+    </div>
+
+    <div class="random-picked-badges">
+      <span class="random-time-badge">⏱️ ${minMinutes} min de execução</span>
+      ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
+      <span class="badge badge-priority-${task.priority || 'media'}">${formatPriorityLabel(task.priority || 'media')}</span>
+      ${subtasks.length > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 11px;">📋 ${completedSubs}/${subtasks.length} subtarefas</span>` : ''}
+    </div>
+
+    ${task.description ? `<p class="random-picked-desc">${escapeHtml(task.description)}</p>` : ''}
+
+    <div class="random-info-note">
+      ${totalCandidates > 1 
+        ? `<span>🎲 Havia <strong>${totalCandidates} tarefas</strong> com o menor tempo (${minMinutes}m). "${escapeHtml(task.title)}" foi a sorteada!</span>` 
+        : `<span>⭐ Esta é a tarefa pendente mais rápida para executar no momento (${minMinutes}m).</span>`
+      }
+    </div>
+  `;
+
+  randomTaskModal.classList.remove('hidden');
+}
+
+function closeRandomTaskModal() {
+  if (randomTaskModal) {
+    randomTaskModal.classList.add('hidden');
+  }
+}
+
+function highlightAndScrollToTask(taskId) {
+  // Garante que a visualização de Hoje está ativa
+  if (activeTab !== 'today' && tabToday) {
+    tabToday.click();
+  }
+
+  setTimeout(() => {
+    const cardEl = document.getElementById(`task-card-${taskId}`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      cardEl.classList.remove('highlight-picked');
+      void cardEl.offsetWidth; // Força reflow para reiniciar animação
+      cardEl.classList.add('highlight-picked');
+      setTimeout(() => {
+        cardEl.classList.remove('highlight-picked');
+      }, 3500);
+    }
+  }, 120);
 }
 
 // Configuração e Alteração da Duração da Tarefa
@@ -1399,6 +1539,8 @@ window.openTimerConfig = openTimerConfig;
 window.closeTimerConfigModal = closeTimerConfigModal;
 window.applyTimerPreset = applyTimerPreset;
 window.closeTimerFinishedModal = closeTimerFinishedModal;
+window.pickRandomTask = pickRandomTask;
+window.closeRandomTaskModal = closeRandomTaskModal;
 
 // ==========================================
 // INTEGRAÇÃO COM SUPABASE (Nuvem em Tempo Real)
