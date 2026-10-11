@@ -2,6 +2,8 @@
 // Armazenamento local com sincronização automática e controle por timestamp
 
 const STORAGE_KEY = 'taskflow_data_v2';
+const HISTORY_STORAGE_KEY = 'taskflow_history_v1';
+const ACTIVE_DATE_KEY = 'taskflow_active_date_v1';
 
 // 12 Tarefas Padrão Solicitadas
 const INITIAL_DEFAULT_TASKS = [
@@ -165,11 +167,26 @@ const INITIAL_DEFAULT_TASKS = [
 
 // Estado da Aplicação
 let tasks = [];
+let dailyHistory = {};
+let activeDate = '';
+let activeTab = 'today';
+let openHistoryCards = new Set();
 let initialSubtasks = [];
 let activeFilter = 'all';
 let searchQuery = '';
 
 // Elementos DOM
+const currentDayTitle = document.getElementById('currentDayTitle');
+const tabToday = document.getElementById('tabToday');
+const tabHistory = document.getElementById('tabHistory');
+const historyBadge = document.getElementById('historyBadge');
+const btnCompleteDay = document.getElementById('btnCompleteDay');
+
+const todayView = document.getElementById('todayView');
+const historyView = document.getElementById('historyView');
+const historyListContainer = document.getElementById('historyListContainer');
+const historyOverallBadge = document.getElementById('historyOverallBadge');
+
 const taskForm = document.getElementById('taskForm');
 const taskTitleInput = document.getElementById('taskTitle');
 const taskCategoryInput = document.getElementById('taskCategory');
@@ -199,26 +216,94 @@ const btnResetDefaults = document.getElementById('btnResetDefaults');
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-  loadTasks();
+  loadData();
   setupEventListeners();
+  setupTabSwitching();
+  updateDateDisplay();
   render();
+  renderHistory();
   startGlobalTicker();
 });
 
+// Funções de Data
+function getTodayDateKey() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateDisplay(dateStr) {
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const todayKey = getTodayDateKey();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    const formatted = dateObj.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    if (dateStr === todayKey) return `Hoje — ${capitalized}`;
+    if (dateStr === yKey) return `Ontem — ${capitalized}`;
+    return capitalized;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+function updateDateDisplay() {
+  if (currentDayTitle) {
+    const todayKey = getTodayDateKey();
+    currentDayTitle.textContent = formatDateDisplay(todayKey);
+  }
+}
+
 // Carregar e Salvar Dados
-function loadTasks() {
+function loadData() {
+  // 1. Carrega histórico
+  try {
+    const rawHist = localStorage.getItem(HISTORY_STORAGE_KEY);
+    dailyHistory = rawHist ? JSON.parse(rawHist) : {};
+  } catch (e) {
+    dailyHistory = {};
+  }
+
+  // 2. Carrega tarefas da rotina
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       tasks = JSON.parse(raw);
     } else {
-      // Carrega as 12 tarefas padrão
       tasks = JSON.parse(JSON.stringify(INITIAL_DEFAULT_TASKS));
       saveTasks();
     }
   } catch (e) {
-    console.error('Erro ao carregar dados do localStorage:', e);
     tasks = JSON.parse(JSON.stringify(INITIAL_DEFAULT_TASKS));
+  }
+
+  // 3. Verifica virada automática do dia (Rollover à meia-noite)
+  const todayKey = getTodayDateKey();
+  const storedActiveDate = localStorage.getItem(ACTIVE_DATE_KEY);
+
+  if (storedActiveDate && storedActiveDate !== todayKey) {
+    // Arquiva o dia anterior automaticamente
+    archiveDay(storedActiveDate, false);
+    // Reinicia as tarefas para o novo dia
+    resetTasksForNewDay();
+    activeDate = todayKey;
+    localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
+  } else {
+    activeDate = storedActiveDate || todayKey;
+    localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
   }
 }
 
@@ -227,6 +312,89 @@ function saveTasks() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
   } catch (e) {
     console.error('Erro ao salvar tarefas:', e);
+  }
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(dailyHistory));
+  } catch (e) {
+    console.error('Erro ao salvar histórico:', e);
+  }
+}
+
+function saveData() {
+  saveTasks();
+  saveHistory();
+  localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
+}
+
+function archiveDay(dateKey, isManual = false) {
+  if (!tasks || tasks.length === 0) return;
+
+  // Pausa cronômetros ativos
+  tasks.forEach(t => {
+    if (t.isRunning) {
+      pauseTimer(t.id);
+    }
+  });
+
+  const totalTasks = tasks.length;
+  const completedCount = tasks.filter(t => t.completed).length;
+  const pendingCount = totalTasks - completedCount;
+  const percent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+
+  let totalSeconds = 0;
+  tasks.forEach(t => {
+    totalSeconds += getTaskCurrentSeconds(t);
+  });
+
+  dailyHistory[dateKey] = {
+    date: dateKey,
+    dateDisplay: formatDateDisplay(dateKey),
+    closedAt: Date.now(),
+    isManual: isManual,
+    totalTasks,
+    completedCount,
+    pendingCount,
+    percent,
+    totalSeconds,
+    tasks: JSON.parse(JSON.stringify(tasks))
+  };
+
+  saveHistory();
+}
+
+function resetTasksForNewDay() {
+  tasks = tasks.map(task => ({
+    ...task,
+    completed: false,
+    elapsedSeconds: 0,
+    isRunning: false,
+    timerStartedAt: null,
+    subtasks: (task.subtasks || []).map(st => ({
+      ...st,
+      completed: false
+    }))
+  }));
+  saveTasks();
+}
+
+function handleCloseDay() {
+  const completedCount = tasks.filter(t => t.completed).length;
+  const pendingCount = tasks.length - completedCount;
+
+  const msg = `Deseja encerrar o dia de hoje (${formatDateDisplay(activeDate)})?\n\n` +
+    `• ${completedCount} tarefas CONCLUÍDAS\n` +
+    `• ${pendingCount} tarefas NÃO REALIZADAS / PENDENTES\n\n` +
+    `O balanço deste dia será registrado no Histórico. As tarefas da rotina serão desmarcadas e os cronômetros zerados para a próxima rotina.`;
+
+  if (confirm(msg)) {
+    archiveDay(activeDate, true);
+    resetTasksForNewDay();
+    render();
+    renderHistory();
+    alert('Dia encerrado com sucesso! O relatório completo foi salvo no Histórico.');
   }
 }
 
@@ -272,6 +440,11 @@ function setupEventListeners() {
     }
   });
 
+  // Fechar o dia manualmente
+  if (btnCompleteDay) {
+    btnCompleteDay.addEventListener('click', handleCloseDay);
+  }
+
   // Exportar / Importar / Resetar
   btnExport.addEventListener('click', exportData);
   importInput.addEventListener('change', importData);
@@ -282,6 +455,31 @@ function setupEventListeners() {
         saveTasks();
         render();
       }
+    });
+  }
+}
+
+// Alternância entre Hoje e Histórico
+function setupTabSwitching() {
+  if (tabToday) {
+    tabToday.addEventListener('click', () => {
+      activeTab = 'today';
+      tabToday.classList.add('active');
+      tabHistory.classList.remove('active');
+      if (todayView) todayView.classList.remove('hidden');
+      if (historyView) historyView.classList.add('hidden');
+      render();
+    });
+  }
+
+  if (tabHistory) {
+    tabHistory.addEventListener('click', () => {
+      activeTab = 'history';
+      tabHistory.classList.add('active');
+      tabToday.classList.remove('active');
+      if (todayView) todayView.classList.add('hidden');
+      if (historyView) historyView.classList.remove('hidden');
+      renderHistory();
     });
   }
 }
@@ -539,6 +737,9 @@ function updateMetrics() {
   statPendingTasks.textContent = pending;
   statCompletedTasks.textContent = completed;
   statTotalTime.textContent = formatReadableTime(totalSecs);
+  if (historyBadge) {
+    historyBadge.textContent = Object.keys(dailyHistory).length;
+  }
 }
 
 function renderTasks() {
@@ -686,7 +887,14 @@ function renderTasks() {
 
 // Backup & Restauração
 function exportData() {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+  const payload = {
+    version: '2.1',
+    exportedAt: new Date().toISOString(),
+    activeDate: activeDate,
+    tasks: tasks,
+    dailyHistory: dailyHistory
+  };
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute("href", dataStr);
   downloadAnchor.setAttribute("download", `taskflow_backup_${new Date().toISOString().slice(0, 10)}.json`);
@@ -704,11 +912,27 @@ function importData(e) {
     try {
       const imported = JSON.parse(event.target.result);
       if (Array.isArray(imported)) {
+        // Formato legado v2 (apenas tarefas)
         if (confirm(`Substituir dados atuais por ${imported.length} tarefas importadas?`)) {
           tasks = imported;
           saveTasks();
           render();
           alert('Tarefas importadas com sucesso!');
+        }
+      } else if (imported && Array.isArray(imported.tasks)) {
+        // Formato v2.1 (com histórico)
+        if (confirm(`Importar backup com ${imported.tasks.length} tarefas e histórico de dias?`)) {
+          tasks = imported.tasks;
+          if (imported.dailyHistory) {
+            dailyHistory = { ...dailyHistory, ...imported.dailyHistory };
+          }
+          if (imported.activeDate) {
+            activeDate = imported.activeDate;
+          }
+          saveData();
+          render();
+          renderHistory();
+          alert('Backup com histórico importado com sucesso!');
         }
       } else {
         alert('Formato de arquivo JSON inválido.');
@@ -721,6 +945,166 @@ function importData(e) {
   e.target.value = '';
 }
 
+// Renderização do Histórico Diário
+function renderHistory() {
+  if (!historyListContainer) return;
+  const dates = Object.keys(dailyHistory).sort().reverse();
+  if (historyBadge) {
+    historyBadge.textContent = dates.length;
+  }
+
+  if (dates.length === 0) {
+    historyListContainer.innerHTML = `
+      <div class="history-empty-card">
+        <div class="history-empty-icon">📜</div>
+        <h3>Nenhum dia arquivado ainda</h3>
+        <p>Ao clicar no botão <strong>"Fechar o Dia"</strong> ou automaticamente na virada da meia-noite, o balanço de tarefas realizadas e pendentes de cada dia ficará guardado aqui para seu controle.</p>
+      </div>
+    `;
+    if (historyOverallBadge) {
+      historyOverallBadge.innerHTML = `<span class="history-stat-tag">0 dias arquivados</span>`;
+    }
+    return;
+  }
+
+  // Estatísticas gerais
+  let allTotal = 0;
+  let allCompleted = 0;
+  let allSeconds = 0;
+  dates.forEach(d => {
+    const entry = dailyHistory[d];
+    allTotal += entry.totalTasks || 0;
+    allCompleted += entry.completedCount || 0;
+    allSeconds += entry.totalSeconds || 0;
+  });
+  const avgRate = allTotal > 0 ? Math.round((allCompleted / allTotal) * 100) : 0;
+
+  if (historyOverallBadge) {
+    historyOverallBadge.innerHTML = `
+      <span class="history-stat-tag">📅 ${dates.length} ${dates.length === 1 ? 'dia arquivado' : 'dias arquivados'}</span>
+      <span class="history-stat-tag">🎯 Média: ${avgRate}% concluído</span>
+      <span class="history-stat-tag">⏱️ Tempo total: ${formatReadableTime(allSeconds)}</span>
+    `;
+  }
+
+  historyListContainer.innerHTML = dates.map(dateKey => {
+    const entry = dailyHistory[dateKey];
+    const isOpen = openHistoryCards.has(dateKey);
+    const entryTasks = entry.tasks || [];
+    const completedTasks = entryTasks.filter(t => t.completed);
+    const pendingTasks = entryTasks.filter(t => !t.completed);
+
+    return `
+      <div class="history-day-card ${isOpen ? 'open' : ''}" id="history-day-${dateKey}">
+        <div class="history-day-header" onclick="toggleHistoryCard('${dateKey}')">
+          <div class="history-day-main">
+            <div class="history-day-date">
+              <span>📅 ${escapeHtml(entry.dateDisplay || dateKey)}</span>
+            </div>
+            <span class="history-day-date-time">${entry.totalTasks} tarefas na rotina</span>
+          </div>
+
+          <div class="history-day-badges">
+            <span class="badge-day-stat success">✅ ${entry.completedCount} Feitas</span>
+            <span class="badge-day-stat pending">❌ ${entry.pendingCount} Pendentes</span>
+            <span class="badge-day-stat rate">📊 ${entry.percent}%</span>
+            <span class="badge-day-stat time">⏱️ ${formatTimeHMS(entry.totalSeconds)}</span>
+            <span class="history-chevron">▾</span>
+          </div>
+        </div>
+
+        <div class="history-day-progress">
+          <div class="history-day-progress-bar" style="width: ${entry.percent}%"></div>
+        </div>
+
+        <div class="history-day-body">
+          <div class="history-columns">
+            <!-- Coluna Concluídas -->
+            <div class="history-column">
+              <div class="history-col-title done">
+                <span>✅ Concluídas no Dia (${completedTasks.length})</span>
+              </div>
+              <div class="history-task-list">
+                ${completedTasks.length === 0 ? '<p style="font-size: 13px; color: var(--text-dim); padding: 8px 0;">Nenhuma tarefa foi concluída neste dia.</p>' : ''}
+                ${completedTasks.map(t => renderHistoryTaskItem(t, true)).join('')}
+              </div>
+            </div>
+
+            <!-- Coluna Não Realizadas -->
+            <div class="history-column">
+              <div class="history-col-title pending">
+                <span>❌ Não Realizadas / Pendentes (${pendingTasks.length})</span>
+              </div>
+              <div class="history-task-list">
+                ${pendingTasks.length === 0 ? '<p style="font-size: 13px; color: var(--success); padding: 8px 0;">Todas as tarefas foram cumpridas! 🚀</p>' : ''}
+                ${pendingTasks.map(t => renderHistoryTaskItem(t, false)).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="history-day-footer">
+            <button type="button" class="btn-delete-history-day" onclick="deleteHistoryDay('${dateKey}', event)">
+              🗑️ Excluir este registro de histórico
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderHistoryTaskItem(task, isDone) {
+  const subtasks = task.subtasks || [];
+  const doneSub = subtasks.filter(s => s.completed).length;
+  const timeStr = task.elapsedSeconds > 0 ? formatTimeHMS(task.elapsedSeconds) : '00:00:00';
+
+  return `
+    <div class="history-task-mini ${isDone ? 'done' : 'pending'}">
+      <div class="history-task-mini-header">
+        <div>
+          <span class="history-task-mini-title">${escapeHtml(task.title)}</span>
+          ${task.category ? `<span class="badge badge-category" style="margin-left: 6px; font-size: 10px; padding: 2px 6px;">📁 ${escapeHtml(task.category)}</span>` : ''}
+        </div>
+        <span class="history-task-mini-time">⏱️ ${timeStr}</span>
+      </div>
+      ${task.description ? `<p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(task.description)}</p>` : ''}
+      ${subtasks.length > 0 ? `
+        <div class="history-task-mini-subtasks">
+          <span>Subtarefas (${doneSub}/${subtasks.length} concluídas):</span>
+          ${subtasks.map(s => `
+            <div>${s.completed ? '✅' : '⏳'} ${escapeHtml(s.title)}</div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function toggleHistoryCard(dateKey) {
+  if (openHistoryCards.has(dateKey)) {
+    openHistoryCards.delete(dateKey);
+  } else {
+    openHistoryCards.add(dateKey);
+  }
+  const card = document.getElementById(`history-day-${dateKey}`);
+  if (card) {
+    card.classList.toggle('open');
+  }
+}
+
+function deleteHistoryDay(dateKey, e) {
+  if (e) e.stopPropagation();
+  if (confirm(`Tem certeza que deseja excluir o registro do dia ${dateKey}?`)) {
+    delete dailyHistory[dateKey];
+    openHistoryCards.delete(dateKey);
+    saveHistory();
+    renderHistory();
+    if (historyBadge) {
+      historyBadge.textContent = Object.keys(dailyHistory).length;
+    }
+  }
+}
+
 // Utilitários
 function escapeHtml(text) {
   if (!text) return '';
@@ -731,3 +1115,16 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// Exporta funções globais para handlers HTML inline
+window.toggleHistoryCard = toggleHistoryCard;
+window.deleteHistoryDay = deleteHistoryDay;
+window.removeInitialSubtask = removeInitialSubtask;
+window.toggleTaskCompletion = toggleTaskCompletion;
+window.deleteTask = deleteTask;
+window.toggleSubtask = toggleSubtask;
+window.addSubtaskToTask = addSubtaskToTask;
+window.removeSubtaskFromTask = removeSubtaskFromTask;
+window.startTimer = startTimer;
+window.pauseTimer = pauseTimer;
+window.resetTimer = resetTimer;

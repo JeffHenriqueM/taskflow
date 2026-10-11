@@ -41,6 +41,32 @@
       </div>
     </header>
 
+    <!-- Routine & Day Navigation Bar -->
+    <section class="day-navigation-bar">
+      <div class="day-info">
+        <span class="day-icon">📅</span>
+        <div>
+          <div class="day-title" id="currentDayTitle">Hoje, 11 de Outubro de 2026</div>
+          <div class="day-subtitle">Rotina Diária de Tarefas Recorrentes</div>
+        </div>
+      </div>
+      <div class="day-actions">
+        <div class="view-switch">
+          <button type="button" id="tabToday" class="switch-btn active">
+            <span>📋 Hoje</span>
+          </button>
+          <button type="button" id="tabHistory" class="switch-btn">
+            <span>📜 Histórico dos Dias</span>
+            <span id="historyBadge" class="badge-count">0</span>
+          </button>
+        </div>
+        <button type="button" id="btnCompleteDay" class="btn btn-finish-day" title="Arquiva o relatório do dia no Histórico e prepara a rotina para o próximo dia">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          Fechar o Dia
+        </button>
+      </div>
+    </section>
+
     <!-- Metrics Bar -->
     <section class="metrics-grid">
       <div class="metric-card">
@@ -88,70 +114,90 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <!-- Form to add task -->
-      <section class="task-form-card">
-        <h2>Adicionar Nova Tarefa</h2>
-        <form id="taskForm" class="task-form">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="taskTitle">Título da Tarefa *</label>
-              <input type="text" id="taskTitle" placeholder="Ex: Produzir criativos para campanha" required>
+      <!-- Today View (Daily Routine) -->
+      <div id="todayView">
+        <!-- Form to add task -->
+        <section class="task-form-card">
+          <h2>Adicionar Nova Tarefa à Rotina</h2>
+          <form id="taskForm" class="task-form">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="taskTitle">Título da Tarefa *</label>
+                <input type="text" id="taskTitle" placeholder="Ex: Produzir criativos para campanha" required>
+              </div>
+              <div class="form-group">
+                <label for="taskCategory">Categoria</label>
+                <input type="text" id="taskCategory" placeholder="Ex: FIAS, TikTok, Pessoal">
+              </div>
+              <div class="form-group">
+                <label for="taskPriority">Prioridade</label>
+                <select id="taskPriority">
+                  <option value="baixa">Baixa</option>
+                  <option value="media" selected>Média</option>
+                  <option value="alta">Alta</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
             </div>
+
             <div class="form-group">
-              <label for="taskCategory">Categoria</label>
-              <input type="text" id="taskCategory" placeholder="Ex: FIAS, TikTok, Pessoal">
+              <label for="taskDescription">Descrição / Notas (Opcional)</label>
+              <textarea id="taskDescription" rows="2" placeholder="Observações, escopo ou links..."></textarea>
             </div>
+
+            <!-- Initial Subtasks Input -->
             <div class="form-group">
-              <label for="taskPriority">Prioridade</label>
-              <select id="taskPriority">
-                <option value="baixa">Baixa</option>
-                <option value="media" selected>Média</option>
-                <option value="alta">Alta</option>
-                <option value="urgente">Urgente</option>
-              </select>
+              <label>Subtarefas Iniciais (Opcional)</label>
+              <div class="subtask-input-wrapper">
+                <input type="text" id="initialSubtaskInput" placeholder="Digite uma subtarefa e tecle 'Adicionar' ou Enter">
+                <button type="button" id="btnAddInitialSubtask" class="btn btn-secondary">Adicionar</button>
+              </div>
+              <div id="initialSubtasksList" class="initial-subtasks-chips"></div>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label for="taskDescription">Descrição / Notas (Opcional)</label>
-            <textarea id="taskDescription" rows="2" placeholder="Observações, escopo ou links..."></textarea>
-          </div>
-
-          <!-- Initial Subtasks Input -->
-          <div class="form-group">
-            <label>Subtarefas Iniciais (Opcional)</label>
-            <div class="subtask-input-wrapper">
-              <input type="text" id="initialSubtaskInput" placeholder="Digite uma subtarefa e tecle 'Adicionar' ou Enter">
-              <button type="button" id="btnAddInitialSubtask" class="btn btn-secondary">Adicionar</button>
+            <div class="form-footer">
+              <button type="submit" class="btn btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Salvar Tarefa
+              </button>
             </div>
-            <div id="initialSubtasksList" class="initial-subtasks-chips"></div>
+          </form>
+        </section>
+
+        <!-- Task Controls & Filters -->
+        <section class="tasks-toolbar">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="searchInput" placeholder="Pesquisar tarefas ou subtarefas...">
           </div>
-
-          <div class="form-footer">
-            <button type="submit" class="btn btn-primary">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Salvar Tarefa
-            </button>
+          <div class="filter-buttons">
+            <button class="filter-btn active" data-filter="all">Todas</button>
+            <button class="filter-btn" data-filter="pending">Pendentes</button>
+            <button class="filter-btn" data-filter="completed">Concluídas</button>
           </div>
-        </form>
-      </section>
+        </section>
 
-      <!-- Task Controls & Filters -->
-      <section class="tasks-toolbar">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="searchInput" placeholder="Pesquisar tarefas ou subtarefas...">
-        </div>
-        <div class="filter-buttons">
-          <button class="filter-btn active" data-filter="all">Todas</button>
-          <button class="filter-btn" data-filter="pending">Pendentes</button>
-          <button class="filter-btn" data-filter="completed">Concluídas</button>
-        </div>
-      </section>
+        <!-- Tasks List -->
+        <section id="tasksContainer" class="tasks-container">
+          <!-- Rendered via JavaScript -->
+        </section>
+      </div>
 
-      <!-- Tasks List -->
-      <section id="tasksContainer" class="tasks-container">
-        <!-- Rendered via JavaScript -->
+      <!-- History View (Past Days Logs) -->
+      <section id="historyView" class="history-view hidden">
+        <div class="history-header">
+          <div>
+            <h2>Histórico de Desempenho Diário</h2>
+            <p class="subtitle">Consulte o que foi concluído e o que ficou pendente em cada dia anterior</p>
+          </div>
+          <div class="history-overall-badge" id="historyOverallBadge">
+            <!-- Estatísticas gerais calculadas via JS -->
+          </div>
+        </div>
+
+        <div id="historyListContainer" class="history-list-container">
+          <!-- Cards de cada dia gerados via JS -->
+        </div>
       </section>
     </main>
   </div>
