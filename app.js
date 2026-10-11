@@ -1603,6 +1603,7 @@ function mapModelToDbTask(task) {
     description: task.description || '',
     completed: !!task.completed,
     created_at: task.createdAt || Date.now(),
+    target_seconds: task.targetSeconds || 1500,
     elapsed_seconds: task.elapsedSeconds || 0,
     is_running: !!task.isRunning,
     timer_started_at: task.timerStartedAt || null,
