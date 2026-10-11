@@ -197,6 +197,7 @@ const taskForm = document.getElementById('taskForm');
 const taskTitleInput = document.getElementById('taskTitle');
 const taskCategoryInput = document.getElementById('taskCategory');
 const taskPrioritySelect = document.getElementById('taskPriority');
+const taskTimerMinutesInput = document.getElementById('taskTimerMinutes');
 const taskDescriptionInput = document.getElementById('taskDescription');
 const initialSubtaskInput = document.getElementById('initialSubtaskInput');
 const btnAddInitialSubtask = document.getElementById('btnAddInitialSubtask');
@@ -219,6 +220,21 @@ const btnPauseActiveTimer = document.getElementById('btnPauseActiveTimer');
 const btnExport = document.getElementById('btnExport');
 const importInput = document.getElementById('importInput');
 const btnResetDefaults = document.getElementById('btnResetDefaults');
+
+// Modais de Timer e Alerta
+const timerFinishedModal = document.getElementById('timerFinishedModal');
+const finishedTaskName = document.getElementById('finishedTaskName');
+const btnFinishedAdd5Min = document.getElementById('btnFinishedAdd5Min');
+const btnFinishedCompleteTask = document.getElementById('btnFinishedCompleteTask');
+const btnFinishedDismiss = document.getElementById('btnFinishedDismiss');
+
+const timerConfigModal = document.getElementById('timerConfigModal');
+const timerConfigTaskTitle = document.getElementById('timerConfigTaskTitle');
+const customMinutesInput = document.getElementById('customMinutesInput');
+const btnSaveCustomMinutes = document.getElementById('btnSaveCustomMinutes');
+
+let currentConfiguringTaskId = null;
+let currentFinishedTaskId = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -466,6 +482,47 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Ações do Modal de Tempo Esgotado
+  if (btnFinishedAdd5Min) {
+    btnFinishedAdd5Min.addEventListener('click', () => {
+      if (currentFinishedTaskId) {
+        const task = tasks.find(t => t.id === currentFinishedTaskId);
+        if (task) {
+          task.targetSeconds = (getTaskTargetSeconds(task)) + 300;
+          task.elapsedSeconds = task.targetSeconds - 300;
+          startTimer(task.id);
+        }
+      }
+      closeTimerFinishedModal();
+    });
+  }
+
+  if (btnFinishedCompleteTask) {
+    btnFinishedCompleteTask.addEventListener('click', () => {
+      if (currentFinishedTaskId) {
+        toggleTaskCompletion(currentFinishedTaskId);
+      }
+      closeTimerFinishedModal();
+    });
+  }
+
+  if (btnFinishedDismiss) {
+    btnFinishedDismiss.addEventListener('click', closeTimerFinishedModal);
+  }
+
+  if (btnSaveCustomMinutes) {
+    btnSaveCustomMinutes.addEventListener('click', () => {
+      if (!currentConfiguringTaskId || !customMinutesInput) return;
+      const mins = parseInt(customMinutesInput.value, 10);
+      if (mins > 0) {
+        setTaskDuration(currentConfiguringTaskId, mins);
+        closeTimerConfigModal();
+      } else {
+        alert('Digite uma quantidade válida de minutos.');
+      }
+    });
+  }
 }
 
 // Alternância entre Hoje e Histórico
@@ -526,6 +583,8 @@ function handleCreateTask(e) {
   const title = taskTitleInput.value.trim();
   if (!title) return;
 
+  const targetMins = parseInt(taskTimerMinutesInput ? taskTimerMinutesInput.value : '25', 10) || 25;
+
   const newTask = {
     id: generateId(),
     title: title,
@@ -534,6 +593,7 @@ function handleCreateTask(e) {
     description: taskDescriptionInput.value.trim(),
     completed: false,
     createdAt: Date.now(),
+    targetSeconds: targetMins * 60,
     elapsedSeconds: 0,
     isRunning: false,
     timerStartedAt: null,
@@ -545,6 +605,7 @@ function handleCreateTask(e) {
 
   // Reset form
   taskForm.reset();
+  if (taskTimerMinutesInput) taskTimerMinutesInput.value = '25';
   initialSubtasks = [];
   renderInitialSubtasksChips();
 
@@ -552,8 +613,32 @@ function handleCreateTask(e) {
   dbUpsertTask(newTask);
 }
 
-// Controle do Timer
+// Auxiliares de Contagem Regressiva
+function getTaskTargetSeconds(task) {
+  return task.targetSeconds || 1500; // 25 min padrão (1500s)
+}
+
+function getTaskRemainingSeconds(task) {
+  const target = getTaskTargetSeconds(task);
+  let elapsed = task.elapsedSeconds || 0;
+  if (task.isRunning && task.timerStartedAt) {
+    elapsed += Math.floor((Date.now() - task.timerStartedAt) / 1000);
+  }
+  return Math.max(0, target - elapsed);
+}
+
+// Obter tempo trabalhado total em segundos para métricas e relatórios
+function getTaskCurrentSeconds(task) {
+  let total = task.elapsedSeconds || 0;
+  if (task.isRunning && task.timerStartedAt) {
+    total += Math.floor((Date.now() - task.timerStartedAt) / 1000);
+  }
+  return total;
+}
+
+// Controle do Timer (Contagem Regressiva)
 function startTimer(taskId) {
+  requestNotificationPermission();
   const now = Date.now();
   
   // Pausa qualquer outro timer rodando para manter rastreamento único e preciso
@@ -569,6 +654,11 @@ function startTimer(taskId) {
 
   const task = tasks.find(t => t.id === taskId);
   if (task) {
+    // Se a contagem já havia zerado, reinicia do começo
+    const remaining = getTaskRemainingSeconds(task);
+    if (remaining <= 0) {
+      task.elapsedSeconds = 0;
+    }
     task.isRunning = true;
     task.timerStartedAt = now;
     dbUpsertTask(task);
@@ -595,7 +685,8 @@ function pauseTimer(taskId) {
 function resetTimer(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (task) {
-    if (confirm(`Deseja zerar o cronômetro da tarefa "${task.title}"?`)) {
+    const mins = Math.round(getTaskTargetSeconds(task) / 60);
+    if (confirm(`Deseja reiniciar a contagem regressiva da tarefa "${task.title}" para ${mins} minutos?`)) {
       task.elapsedSeconds = 0;
       task.isRunning = false;
       task.timerStartedAt = null;
@@ -606,13 +697,146 @@ function resetTimer(taskId) {
   }
 }
 
-// Obter tempo total atual de uma tarefa em segundos
-function getTaskCurrentSeconds(task) {
-  let total = task.elapsedSeconds || 0;
-  if (task.isRunning && task.timerStartedAt) {
-    total += Math.floor((Date.now() - task.timerStartedAt) / 1000);
+// Configuração e Alteração da Duração da Tarefa
+function openTimerConfig(taskId, e) {
+  if (e) e.stopPropagation();
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  currentConfiguringTaskId = taskId;
+  const currentMins = Math.round(getTaskTargetSeconds(task) / 60);
+  if (timerConfigTaskTitle) {
+    timerConfigTaskTitle.textContent = `Tarefa: "${task.title}" (Atual: ${currentMins} min)`;
   }
-  return total;
+  if (customMinutesInput) {
+    customMinutesInput.value = currentMins;
+  }
+  if (timerConfigModal) {
+    timerConfigModal.classList.remove('hidden');
+  }
+}
+
+function closeTimerConfigModal() {
+  if (timerConfigModal) timerConfigModal.classList.add('hidden');
+  currentConfiguringTaskId = null;
+}
+
+function applyTimerPreset(minutes) {
+  if (!currentConfiguringTaskId) return;
+  setTaskDuration(currentConfiguringTaskId, minutes);
+  closeTimerConfigModal();
+}
+
+function setTaskDuration(taskId, minutes) {
+  const mins = parseInt(minutes, 10);
+  if (isNaN(mins) || mins <= 0) return;
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    task.targetSeconds = mins * 60;
+    task.elapsedSeconds = 0;
+    task.isRunning = false;
+    task.timerStartedAt = null;
+    saveTasks();
+    render();
+    dbUpsertTask(task);
+  }
+}
+
+// Notificações e Alarme de Áudio
+function playAlarmSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    
+    // Sequência de notas harmônicas agradáveis (C5, E5, G5, C6)
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      
+      const startTime = ctx.currentTime + i * 0.14;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.35, startTime + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.38);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.42);
+    });
+
+    // Segunda repetição com tom de sino suave
+    setTimeout(() => {
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        
+        const startTime = ctx.currentTime + i * 0.14;
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(0.35, startTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.44);
+      });
+    }, 650);
+  } catch (err) {
+    console.error('Erro ao tocar som de alarme:', err);
+  }
+}
+
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendTimerFinishedNotification(task) {
+  playAlarmSound();
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('⏱️ Tempo Esgotado! — TaskFlow', {
+        body: `A contagem regressiva da tarefa "${task.title}" terminou!`,
+        icon: 'favicon.svg'
+      });
+    } catch (e) {
+      console.warn('Erro ao disparar notificação do navegador:', e);
+    }
+  }
+
+  showTimerFinishedModal(task);
+}
+
+function showTimerFinishedModal(task) {
+  currentFinishedTaskId = task.id;
+  if (finishedTaskName) finishedTaskName.textContent = `"${task.title}"`;
+  if (timerFinishedModal) timerFinishedModal.classList.remove('hidden');
+}
+
+function closeTimerFinishedModal() {
+  if (timerFinishedModal) timerFinishedModal.classList.add('hidden');
+  currentFinishedTaskId = null;
+}
+
+function finishCountdown(task) {
+  task.isRunning = false;
+  task.timerStartedAt = null;
+  task.elapsedSeconds = getTaskTargetSeconds(task);
+  saveTasks();
+  render();
+  dbUpsertTask(task);
+  sendTimerFinishedNotification(task);
 }
 
 // Formatação de Tempo
@@ -643,7 +867,7 @@ function formatPriorityLabel(p) {
   }
 }
 
-// Ticker Global (Atualiza displays a cada 1 segundo)
+// Ticker Global (Atualiza contagem regressiva a cada 1 segundo)
 function startGlobalTicker() {
   setInterval(() => {
     const runningTask = tasks.find(t => t.isRunning);
@@ -652,19 +876,31 @@ function startGlobalTicker() {
       return;
     }
 
+    const remainingSecs = getTaskRemainingSeconds(runningTask);
+    const timeFormatted = formatTimeHMS(remainingSecs);
+
+    if (remainingSecs <= 0) {
+      finishCountdown(runningTask);
+      return;
+    }
+
     // Atualiza banner ativo
     activeTimerBanner.classList.remove('hidden');
     activeTaskTitle.textContent = runningTask.title;
-    const currentSecs = getTaskCurrentSeconds(runningTask);
-    activeTaskTime.textContent = formatTimeHMS(currentSecs);
+    activeTaskTime.textContent = timeFormatted;
 
     // Atualiza o display no card da tarefa sem re-renderizar todo o DOM
     const timerDisplayEl = document.getElementById(`timer-display-${runningTask.id}`);
     if (timerDisplayEl) {
-      timerDisplayEl.textContent = formatTimeHMS(currentSecs);
+      timerDisplayEl.textContent = timeFormatted;
+      if (remainingSecs <= 60) {
+        timerDisplayEl.classList.add('warning');
+      } else {
+        timerDisplayEl.classList.remove('warning');
+      }
     }
 
-    // Atualiza métrica total
+    // Atualiza métrica total de tempo trabalhado
     updateMetrics();
   }, 1000);
 }
@@ -792,8 +1028,10 @@ function renderTasks() {
 
   tasksContainer.innerHTML = filtered.map(task => {
     const isRunning = task.isRunning;
-    const currentSeconds = getTaskCurrentSeconds(task);
-    const timeFormatted = formatTimeHMS(currentSeconds);
+    const remainingSecs = getTaskRemainingSeconds(task);
+    const timeFormatted = formatTimeHMS(remainingSecs);
+    const targetMins = Math.round(getTaskTargetSeconds(task) / 60);
+    const isFinished = remainingSecs === 0 && (task.elapsedSeconds || 0) > 0;
 
     const subtasks = task.subtasks || [];
     const totalSub = subtasks.length;
@@ -824,22 +1062,32 @@ function renderTasks() {
             </div>
           </div>
 
-          <!-- Timer Widget -->
+          <!-- Timer Widget (Contagem Regressiva) -->
           <div class="task-timer-area">
-            <span class="timer-digits ${isRunning ? 'running' : ''}" id="timer-display-${task.id}">
-              ${timeFormatted}
-            </span>
+            <div class="timer-display-group">
+              <span class="timer-digits countdown ${isRunning ? 'running' : ''} ${isFinished ? 'finished' : ''}" id="timer-display-${task.id}">
+                ${timeFormatted}
+              </span>
+              <button 
+                type="button" 
+                class="btn-timer-config" 
+                onclick="openTimerConfig('${task.id}', event)" 
+                title="Alterar duração da contagem (atual: ${targetMins} min)"
+              >
+                ⏱️ ${targetMins}m
+              </button>
+            </div>
             <div class="timer-btns">
               ${isRunning ? `
-                <button class="btn btn-warning btn-sm" onclick="pauseTimer('${task.id}')" title="Pausar Timer">
+                <button class="btn btn-warning btn-sm" onclick="pauseTimer('${task.id}')" title="Pausar Contagem">
                   ⏸ Pausar
                 </button>
               ` : `
-                <button class="btn btn-success btn-sm" onclick="startTimer('${task.id}')" title="Iniciar Timer">
+                <button class="btn btn-success btn-sm" onclick="startTimer('${task.id}')" title="Iniciar Contagem">
                   ▶ Iniciar
                 </button>
               `}
-              <button class="btn btn-secondary btn-sm" onclick="resetTimer('${task.id}')" title="Zerar Timer">
+              <button class="btn btn-secondary btn-sm" onclick="resetTimer('${task.id}')" title="Reiniciar Contagem">
                 ↺
               </button>
             </div>
@@ -1147,6 +1395,10 @@ window.removeSubtaskFromTask = removeSubtaskFromTask;
 window.startTimer = startTimer;
 window.pauseTimer = pauseTimer;
 window.resetTimer = resetTimer;
+window.openTimerConfig = openTimerConfig;
+window.closeTimerConfigModal = closeTimerConfigModal;
+window.applyTimerPreset = applyTimerPreset;
+window.closeTimerFinishedModal = closeTimerFinishedModal;
 
 // ==========================================
 // INTEGRAÇÃO COM SUPABASE (Nuvem em Tempo Real)
@@ -1192,6 +1444,7 @@ function mapDbTaskToModel(row) {
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
+    targetSeconds: row.target_seconds ? Number(row.target_seconds) : 1500,
     elapsedSeconds: row.elapsed_seconds || 0,
     isRunning: !!row.is_running,
     timerStartedAt: row.timer_started_at ? Number(row.timer_started_at) : null,
@@ -1231,7 +1484,15 @@ async function fetchFromSupabase() {
         await supabaseClient.from('tasks').upsert(rows);
       } else if (data.length > 0) {
         // Atualiza tarefas locais com os dados do Supabase
-        tasks = data.map(mapDbTaskToModel);
+        const localTasksMap = new Map(tasks.map(t => [t.id, t]));
+        tasks = data.map(row => {
+          const mapped = mapDbTaskToModel(row);
+          const existing = localTasksMap.get(mapped.id);
+          if (existing && existing.targetSeconds && !row.target_seconds) {
+            mapped.targetSeconds = existing.targetSeconds;
+          }
+          return mapped;
+        });
         saveTasks();
         render();
       }
@@ -1306,7 +1567,12 @@ function handleRealtimeChange(payload) {
   } else if (eventType === 'UPDATE') {
     const idx = tasks.findIndex(t => t.id === newRow.id);
     if (idx !== -1) {
-      tasks[idx] = mapDbTaskToModel(newRow);
+      const existing = tasks[idx];
+      const updated = mapDbTaskToModel(newRow);
+      if (existing && existing.targetSeconds && !newRow.target_seconds) {
+        updated.targetSeconds = existing.targetSeconds;
+      }
+      tasks[idx] = updated;
       saveTasks();
       render();
     }

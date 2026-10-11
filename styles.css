@@ -1248,3 +1248,196 @@ textarea {
   border-color: var(--danger);
 }
 
+/* Timer Display Group & Countdown Configuration */
+.timer-display-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timer-digits.countdown.running {
+  color: var(--success);
+}
+
+.timer-digits.warning {
+  color: var(--warning);
+  animation: pulseWarning 1s infinite alternate;
+}
+
+.timer-digits.finished {
+  color: var(--danger);
+  animation: pulseWarning 0.5s infinite alternate;
+}
+
+@keyframes pulseWarning {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+
+.btn-timer-config {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.btn-timer-config:hover {
+  color: #fff;
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+/* Modais do Sistema (Tempo Esgotado & Configuração de Duração) */
+.app-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  transition: opacity 0.2s ease;
+}
+
+.app-modal-overlay.hidden {
+  display: none;
+}
+
+.app-modal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--shadow-lg), 0 0 30px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  animation: modalPopIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-alarm-icon {
+  font-size: 52px;
+  margin-bottom: 12px;
+  display: inline-block;
+  animation: ringBell 1s infinite ease-in-out;
+}
+
+@keyframes ringBell {
+  0% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-14deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-8deg); }
+  75% { transform: rotate(3deg); }
+  100% { transform: rotate(0); }
+}
+
+.app-modal-card h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.app-modal-card p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.app-modal-card p strong {
+  color: var(--text-main);
+}
+
+.modal-buttons-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timer-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.preset-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 8px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.preset-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.custom-timer-form {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  text-align: left;
+  margin-bottom: 18px;
+}
+
+.custom-timer-form label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.custom-timer-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.custom-timer-input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.modal-close-row {
+  display: flex;
+  justify-content: center;
+}
+
