@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+  </defs>
+  <!-- Background badge -->
+  <rect width="64" height="64" rx="16" fill="url(#gradient)" />
+  
+  <!-- Stopwatch crown & top button -->
+  <rect x="29" y="8" width="6" height="5" rx="1.5" fill="#ffffff" />
+  <rect x="26" y="6" width="12" height="3" rx="1.5" fill="#ffffff" />
+  
+  <!-- Side buttons -->
+  <line x1="46" y1="19" x2="50" y2="15" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+  
+  <!-- Timer dial -->
+  <circle cx="32" cy="37" r="18" fill="none" stroke="#ffffff" stroke-width="3.5" />
+  
+  <!-- Dial ticks -->
+  <line x1="32" y1="22" x2="32" y2="25" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+  <line x1="47" y1="37" x2="44" y2="37" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+  <line x1="17" y1="37" x2="20" y2="37" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+  
+  <!-- Checkmark (Task completed) -->
+  <path d="M24 37 L29.5 42.5 L40.5 31.5" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
