@@ -5,6 +5,12 @@ const STORAGE_KEY = 'taskflow_data_v2';
 const HISTORY_STORAGE_KEY = 'taskflow_history_v1';
 const ACTIVE_DATE_KEY = 'taskflow_active_date_v1';
 
+// Configurações do Supabase
+const SUPABASE_URL = 'https://disepmpblhwimmrhzpls.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_kwfjEi7ObItLBvA5A_3OEg_8UgvR1U_';
+let supabaseClient = null;
+let isSyncing = false;
+
 // 12 Tarefas Padrão Solicitadas
 const INITIAL_DEFAULT_TASKS = [
   {
@@ -223,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
   render();
   renderHistory();
   startGlobalTicker();
+  initSupabase();
 });
 
 // Funções de Data
@@ -363,6 +370,7 @@ function archiveDay(dateKey, isManual = false) {
   };
 
   saveHistory();
+  dbUpsertDailyHistory(dailyHistory[dateKey]);
 }
 
 function resetTasksForNewDay() {
@@ -378,6 +386,7 @@ function resetTasksForNewDay() {
     }))
   }));
   saveTasks();
+  dbSyncAllTasks();
 }
 
 function handleCloseDay() {
@@ -540,6 +549,7 @@ function handleCreateTask(e) {
   renderInitialSubtasksChips();
 
   render();
+  dbUpsertTask(newTask);
 }
 
 // Controle do Timer
@@ -553,6 +563,7 @@ function startTimer(taskId) {
       t.elapsedSeconds += Math.max(0, added);
       t.isRunning = false;
       t.timerStartedAt = null;
+      dbUpsertTask(t);
     }
   });
 
@@ -560,6 +571,7 @@ function startTimer(taskId) {
   if (task) {
     task.isRunning = true;
     task.timerStartedAt = now;
+    dbUpsertTask(task);
   }
 
   saveTasks();
@@ -576,6 +588,7 @@ function pauseTimer(taskId) {
     task.timerStartedAt = null;
     saveTasks();
     render();
+    dbUpsertTask(task);
   }
 }
 
@@ -588,6 +601,7 @@ function resetTimer(taskId) {
       task.timerStartedAt = null;
       saveTasks();
       render();
+      dbUpsertTask(task);
     }
   }
 }
@@ -665,6 +679,7 @@ function toggleTaskCompletion(taskId) {
     }
     saveTasks();
     render();
+    dbUpsertTask(task);
   }
 }
 
@@ -674,6 +689,7 @@ function deleteTask(taskId) {
     tasks = tasks.filter(t => t.id !== taskId);
     saveTasks();
     render();
+    dbDeleteTask(taskId);
   }
 }
 
@@ -686,6 +702,7 @@ function toggleSubtask(taskId, subtaskId) {
       subtask.completed = !subtask.completed;
       saveTasks();
       render();
+      dbUpsertTask(task);
     }
   }
 }
@@ -705,6 +722,7 @@ function addSubtaskToTask(taskId, inputEl) {
     inputEl.value = '';
     saveTasks();
     render();
+    dbUpsertTask(task);
   }
 }
 
@@ -714,6 +732,7 @@ function removeSubtaskFromTask(taskId, subtaskId) {
     task.subtasks = task.subtasks.filter(st => st.id !== subtaskId);
     saveTasks();
     render();
+    dbUpsertTask(task);
   }
 }
 
@@ -1128,3 +1147,238 @@ window.removeSubtaskFromTask = removeSubtaskFromTask;
 window.startTimer = startTimer;
 window.pauseTimer = pauseTimer;
 window.resetTimer = resetTimer;
+
+// ==========================================
+// INTEGRAÇÃO COM SUPABASE (Nuvem em Tempo Real)
+// ==========================================
+
+function initSupabase() {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    try {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      updateSyncStatus('connected', 'Supabase Conectado');
+      subscribeToRealtime();
+      fetchFromSupabase();
+    } catch (err) {
+      console.error('Erro ao conectar ao Supabase:', err);
+      updateSyncStatus('offline', 'Modo Local');
+    }
+  } else {
+    // Caso o script da CDN demore a inicializar
+    setTimeout(() => {
+      if (window.supabase && typeof window.supabase.createClient === 'function') {
+        initSupabase();
+      } else {
+        updateSyncStatus('offline', 'Modo Local');
+      }
+    }, 600);
+  }
+}
+
+function updateSyncStatus(status, text) {
+  const badge = document.getElementById('cloudSyncStatus');
+  if (!badge) return;
+  badge.className = `sync-badge ${status}`;
+  const textEl = badge.querySelector('.sync-text');
+  if (textEl) textEl.textContent = text;
+}
+
+function mapDbTaskToModel(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category || 'Geral',
+    priority: row.priority || 'media',
+    description: row.description || '',
+    completed: !!row.completed,
+    createdAt: row.created_at ? Number(row.created_at) : Date.now(),
+    elapsedSeconds: row.elapsed_seconds || 0,
+    isRunning: !!row.is_running,
+    timerStartedAt: row.timer_started_at ? Number(row.timer_started_at) : null,
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks : []
+  };
+}
+
+function mapModelToDbTask(task) {
+  return {
+    id: task.id,
+    title: task.title,
+    category: task.category || 'Geral',
+    priority: task.priority || 'media',
+    description: task.description || '',
+    completed: !!task.completed,
+    created_at: task.createdAt || Date.now(),
+    elapsed_seconds: task.elapsedSeconds || 0,
+    is_running: !!task.isRunning,
+    timer_started_at: task.timerStartedAt || null,
+    subtasks: task.subtasks || []
+  };
+}
+
+async function fetchFromSupabase() {
+  if (!supabaseClient) return;
+  updateSyncStatus('syncing', 'Sincronizando...');
+  try {
+    const { data, error } = await supabaseClient
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      if (data.length === 0 && tasks.length > 0) {
+        // Banco no Supabase está vazio: envia as tarefas da rotina atual
+        const rows = tasks.map(mapModelToDbTask);
+        await supabaseClient.from('tasks').upsert(rows);
+      } else if (data.length > 0) {
+        // Atualiza tarefas locais com os dados do Supabase
+        tasks = data.map(mapDbTaskToModel);
+        saveTasks();
+        render();
+      }
+      updateSyncStatus('connected', 'Sincronizado');
+    } else if (error) {
+      console.warn('Aviso do Supabase ao carregar tarefas:', error.message);
+      updateSyncStatus('connected', 'Salvo localmente');
+    }
+  } catch (err) {
+    console.error('Falha ao conectar com Supabase:', err);
+    updateSyncStatus('offline', 'Modo Local');
+  }
+
+  // Tenta carregar histórico também se existir
+  try {
+    const { data: histData, error: histError } = await supabaseClient
+      .from('daily_history')
+      .select('*');
+
+    if (!histError && histData && histData.length > 0) {
+      histData.forEach(row => {
+        dailyHistory[row.date] = {
+          date: row.date,
+          dateDisplay: row.date_display || row.date,
+          closedAt: row.closed_at ? Number(row.closed_at) : Date.now(),
+          isManual: !!row.is_manual,
+          totalTasks: row.total_tasks || 0,
+          completedCount: row.completed_count || 0,
+          pendingCount: row.pending_count || 0,
+          percent: row.percent || 0,
+          totalSeconds: row.total_seconds || 0,
+          tasks: Array.isArray(row.tasks) ? row.tasks : []
+        };
+      });
+      saveHistory();
+      renderHistory();
+    }
+  } catch (e) {
+    // Tabela de histórico ainda não criada no Supabase, continua usando localStorage
+  }
+}
+
+function subscribeToRealtime() {
+  if (!supabaseClient) return;
+  try {
+    supabaseClient
+      .channel('tasks-realtime-channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        handleRealtimeChange(payload);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          updateSyncStatus('connected', 'Sincronizado');
+        }
+      });
+  } catch (err) {
+    console.error('Erro ao subscrever canais em tempo real:', err);
+  }
+}
+
+function handleRealtimeChange(payload) {
+  if (isSyncing) return; // Evita loop de atualização originado por este mesmo cliente
+  const { eventType, new: newRow, old: oldRow } = payload;
+
+  if (eventType === 'INSERT') {
+    const idx = tasks.findIndex(t => t.id === newRow.id);
+    if (idx === -1) {
+      tasks.unshift(mapDbTaskToModel(newRow));
+      saveTasks();
+      render();
+    }
+  } else if (eventType === 'UPDATE') {
+    const idx = tasks.findIndex(t => t.id === newRow.id);
+    if (idx !== -1) {
+      tasks[idx] = mapDbTaskToModel(newRow);
+      saveTasks();
+      render();
+    }
+  } else if (eventType === 'DELETE') {
+    if (oldRow && oldRow.id) {
+      tasks = tasks.filter(t => t.id !== oldRow.id);
+      saveTasks();
+      render();
+    }
+  }
+}
+
+async function dbUpsertTask(task) {
+  if (!supabaseClient) return;
+  try {
+    isSyncing = true;
+    updateSyncStatus('syncing', 'Salvando...');
+    await supabaseClient.from('tasks').upsert(mapModelToDbTask(task));
+    updateSyncStatus('connected', 'Sincronizado');
+  } catch (err) {
+    console.error('Erro ao sincronizar tarefa com Supabase:', err);
+    updateSyncStatus('connected', 'Salvo local');
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 350);
+  }
+}
+
+async function dbDeleteTask(taskId) {
+  if (!supabaseClient) return;
+  try {
+    isSyncing = true;
+    updateSyncStatus('syncing', 'Excluindo...');
+    await supabaseClient.from('tasks').delete().eq('id', taskId);
+    updateSyncStatus('connected', 'Sincronizado');
+  } catch (err) {
+    console.error('Erro ao excluir tarefa no Supabase:', err);
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 350);
+  }
+}
+
+async function dbSyncAllTasks() {
+  if (!supabaseClient || tasks.length === 0) return;
+  try {
+    isSyncing = true;
+    updateSyncStatus('syncing', 'Sincronizando...');
+    const rows = tasks.map(mapModelToDbTask);
+    await supabaseClient.from('tasks').upsert(rows);
+    updateSyncStatus('connected', 'Sincronizado');
+  } catch (err) {
+    console.error('Erro ao sincronizar tarefas:', err);
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 350);
+  }
+}
+
+async function dbUpsertDailyHistory(entry) {
+  if (!supabaseClient) return;
+  try {
+    await supabaseClient.from('daily_history').upsert({
+      date: entry.date,
+      date_display: entry.dateDisplay,
+      closed_at: entry.closedAt,
+      is_manual: entry.isManual,
+      total_tasks: entry.totalTasks,
+      completed_count: entry.completedCount,
+      pending_count: entry.pendingCount,
+      percent: entry.percent,
+      total_seconds: entry.totalSeconds,
+      tasks: entry.tasks
+    });
+  } catch (err) {
+    // Silencia caso a tabela ainda não exista no Supabase
+  }
+}

@@ -24,6 +24,10 @@
           </div>
         </div>
         <div class="header-actions">
+          <div id="cloudSyncStatus" class="sync-badge" title="Sincronização com Supabase em tempo real">
+            <span class="sync-dot"></span>
+            <span class="sync-text">Supabase Conectando...</span>
+          </div>
           <button id="btnResetDefaults" class="btn btn-secondary" title="Restaurar a lista original de 12 tarefas">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
             Restaurar Lista Padrão
@@ -202,6 +206,7 @@
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>

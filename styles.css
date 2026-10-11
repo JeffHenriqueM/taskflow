@@ -110,6 +110,56 @@ h1 {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Cloud Sync Badge */
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.sync-badge.connected {
+  color: var(--text-main);
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.sync-badge.connected .sync-dot {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+
+.sync-badge.syncing .sync-dot {
+  background: var(--warning);
+  animation: pulseDot 0.8s infinite alternate;
+}
+
+.sync-badge.offline .sync-dot {
+  background: var(--text-dim);
+}
+
+@keyframes pulseDot {
+  from { opacity: 0.3; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1.15); }
 }
 
 /* Metrics Grid */
