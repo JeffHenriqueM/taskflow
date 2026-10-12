@@ -183,10 +183,17 @@ let searchQuery = '';
 
 // Elementos DOM
 const currentDayTitle = document.getElementById('currentDayTitle');
+const currentDaySubtitle = document.getElementById('currentDaySubtitle');
 const tabToday = document.getElementById('tabToday');
 const tabHistory = document.getElementById('tabHistory');
 const historyBadge = document.getElementById('historyBadge');
 const btnCompleteDay = document.getElementById('btnCompleteDay');
+
+const lblTotalTasks = document.getElementById('lblTotalTasks');
+const lblPendingTasks = document.getElementById('lblPendingTasks');
+const lblCompletedTasks = document.getElementById('lblCompletedTasks');
+const lblTotalTime = document.getElementById('lblTotalTime');
+const lblTotalPomodoros = document.getElementById('lblTotalPomodoros');
 
 const todayView = document.getElementById('todayView');
 const historyView = document.getElementById('historyView');
@@ -325,9 +332,18 @@ function formatDateDisplay(dateStr) {
 }
 
 function updateDateDisplay() {
-  if (currentDayTitle) {
+  if (activeTab === 'history') {
+    if (currentDayTitle) currentDayTitle.textContent = '📜 Histórico de Desempenho Diário';
+    if (currentDaySubtitle) {
+      const count = Object.keys(dailyHistory).length;
+      currentDaySubtitle.textContent = count === 1 
+        ? '1 dia arquivado para consulta' 
+        : `${count} dias arquivados para consulta`;
+    }
+  } else {
     const todayKey = getTodayDateKey();
-    currentDayTitle.textContent = formatDateDisplay(todayKey);
+    if (currentDayTitle) currentDayTitle.textContent = formatDateDisplay(todayKey);
+    if (currentDaySubtitle) currentDaySubtitle.textContent = 'Rotina Diária de Tarefas Recorrentes';
   }
 }
 
@@ -428,8 +444,10 @@ function archiveDay(dateKey, isManual = false) {
   const percent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
 
   let totalSeconds = 0;
+  let totalPomodoros = 0;
   tasks.forEach(t => {
     totalSeconds += getTaskCurrentSeconds(t);
+    totalPomodoros += (t.pomodoroCount || 0);
   });
 
   dailyHistory[dateKey] = {
@@ -442,6 +460,7 @@ function archiveDay(dateKey, isManual = false) {
     pendingCount,
     percent,
     totalSeconds,
+    totalPomodoros,
     tasks: JSON.parse(JSON.stringify(tasks))
   };
 
@@ -673,6 +692,8 @@ function setupTabSwitching() {
       tabHistory.classList.remove('active');
       if (todayView) todayView.classList.remove('hidden');
       if (historyView) historyView.classList.add('hidden');
+      if (btnCompleteDay) btnCompleteDay.style.display = 'inline-flex';
+      updateDateDisplay();
       render();
     });
   }
@@ -684,6 +705,9 @@ function setupTabSwitching() {
       tabToday.classList.remove('active');
       if (todayView) todayView.classList.add('hidden');
       if (historyView) historyView.classList.remove('hidden');
+      if (btnCompleteDay) btnCompleteDay.style.display = 'none';
+      updateDateDisplay();
+      updateMetrics();
       renderHistory();
     });
   }
@@ -1288,8 +1312,10 @@ function startGlobalTicker() {
       }
     }
 
-    // Atualiza métrica total de tempo trabalhado
-    updateMetrics();
+    // Atualiza métrica total de tempo trabalhado na aba de hoje
+    if (activeTab === 'today') {
+      updateTodayMetrics();
+    }
   }, 1000);
 }
 
@@ -1548,6 +1574,14 @@ function render() {
 }
 
 function updateMetrics() {
+  if (activeTab === 'history') {
+    updateHistoryMetrics();
+  } else {
+    updateTodayMetrics();
+  }
+}
+
+function updateTodayMetrics() {
   const total = tasks.length;
   const completed = tasks.filter(t => t.completed).length;
   const pending = total - completed;
@@ -1559,15 +1593,60 @@ function updateMetrics() {
     totalPomodoros += (t.pomodoroCount || 0);
   });
 
-  statTotalTasks.textContent = total;
-  statPendingTasks.textContent = pending;
-  statCompletedTasks.textContent = completed;
-  statTotalTime.textContent = formatReadableTime(totalSecs);
-  if (statTotalPomodoros) {
-    statTotalPomodoros.textContent = totalPomodoros;
-  }
+  if (lblTotalTasks) lblTotalTasks.textContent = 'Total de Tarefas';
+  if (lblPendingTasks) lblPendingTasks.textContent = 'Pendentes';
+  if (lblCompletedTasks) lblCompletedTasks.textContent = 'Concluídas';
+  if (lblTotalTime) lblTotalTime.textContent = 'Tempo Registrado Hoje';
+  if (lblTotalPomodoros) lblTotalPomodoros.textContent = 'Blocos Concluídos';
+
+  if (statTotalTasks) statTotalTasks.textContent = total;
+  if (statPendingTasks) statPendingTasks.textContent = pending;
+  if (statCompletedTasks) statCompletedTasks.textContent = completed;
+  if (statTotalTime) statTotalTime.textContent = formatReadableTime(totalSecs);
+  if (statTotalPomodoros) statTotalPomodoros.textContent = totalPomodoros;
+
   if (historyBadge) {
     historyBadge.textContent = Object.keys(dailyHistory).length;
+  }
+}
+
+function updateHistoryMetrics() {
+  const dates = Object.keys(dailyHistory);
+  let histTotalTasks = 0;
+  let histPendingTasks = 0;
+  let histCompletedTasks = 0;
+  let histTotalSeconds = 0;
+  let histTotalPomodoros = 0;
+
+  dates.forEach(d => {
+    const entry = dailyHistory[d];
+    histTotalTasks += entry.totalTasks || 0;
+    histPendingTasks += entry.pendingCount || 0;
+    histCompletedTasks += entry.completedCount || 0;
+    histTotalSeconds += entry.totalSeconds || 0;
+    if (entry.totalPomodoros !== undefined && entry.totalPomodoros > 0) {
+      histTotalPomodoros += entry.totalPomodoros;
+    } else if (entry.tasks && Array.isArray(entry.tasks)) {
+      entry.tasks.forEach(t => {
+        histTotalPomodoros += (t.pomodoroCount || 0);
+      });
+    }
+  });
+
+  if (lblTotalTasks) lblTotalTasks.textContent = 'Tarefas no Histórico';
+  if (lblPendingTasks) lblPendingTasks.textContent = 'Pendentes no Histórico';
+  if (lblCompletedTasks) lblCompletedTasks.textContent = 'Concluídas no Histórico';
+  if (lblTotalTime) lblTotalTime.textContent = 'Tempo Total no Histórico';
+  if (lblTotalPomodoros) lblTotalPomodoros.textContent = 'Blocos no Histórico';
+
+  if (statTotalTasks) statTotalTasks.textContent = histTotalTasks;
+  if (statPendingTasks) statPendingTasks.textContent = histPendingTasks;
+  if (statCompletedTasks) statCompletedTasks.textContent = histCompletedTasks;
+  if (statTotalTime) statTotalTime.textContent = formatReadableTime(histTotalSeconds);
+  if (statTotalPomodoros) statTotalPomodoros.textContent = histTotalPomodoros;
+
+  if (historyBadge) {
+    historyBadge.textContent = dates.length;
   }
 }
 
@@ -1836,11 +1915,19 @@ function renderHistory() {
   let allTotal = 0;
   let allCompleted = 0;
   let allSeconds = 0;
+  let allPomodoros = 0;
   dates.forEach(d => {
     const entry = dailyHistory[d];
     allTotal += entry.totalTasks || 0;
     allCompleted += entry.completedCount || 0;
     allSeconds += entry.totalSeconds || 0;
+    if (entry.totalPomodoros !== undefined && entry.totalPomodoros > 0) {
+      allPomodoros += entry.totalPomodoros;
+    } else if (entry.tasks && Array.isArray(entry.tasks)) {
+      entry.tasks.forEach(t => {
+        allPomodoros += (t.pomodoroCount || 0);
+      });
+    }
   });
   const avgRate = allTotal > 0 ? Math.round((allCompleted / allTotal) * 100) : 0;
 
@@ -1849,6 +1936,7 @@ function renderHistory() {
       <span class="history-stat-tag">📅 ${dates.length} ${dates.length === 1 ? 'dia arquivado' : 'dias arquivados'}</span>
       <span class="history-stat-tag">🎯 Média: ${avgRate}% concluído</span>
       <span class="history-stat-tag">⏱️ Tempo total: ${formatReadableTime(allSeconds)}</span>
+      ${allPomodoros > 0 ? `<span class="history-stat-tag">🍅 ${allPomodoros} ${allPomodoros === 1 ? 'bloco' : 'blocos'}</span>` : ''}
     `;
   }
 
@@ -1858,6 +1946,13 @@ function renderHistory() {
     const entryTasks = entry.tasks || [];
     const completedTasks = entryTasks.filter(t => t.completed);
     const pendingTasks = entryTasks.filter(t => !t.completed);
+
+    let dayPomodoros = entry.totalPomodoros || 0;
+    if (!dayPomodoros && entryTasks.length > 0) {
+      entryTasks.forEach(t => {
+        dayPomodoros += (t.pomodoroCount || 0);
+      });
+    }
 
     return `
       <div class="history-day-card ${isOpen ? 'open' : ''}" id="history-day-${dateKey}">
@@ -1874,6 +1969,7 @@ function renderHistory() {
             <span class="badge-day-stat pending">❌ ${entry.pendingCount} Pendentes</span>
             <span class="badge-day-stat rate">📊 ${entry.percent}%</span>
             <span class="badge-day-stat time">⏱️ ${formatTimeHMS(entry.totalSeconds)}</span>
+            ${dayPomodoros > 0 ? `<span class="badge-day-stat pomodoro" style="background: rgba(239, 68, 68, 0.18); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 999px; font-size: 12px;">🍅 ${dayPomodoros} ${dayPomodoros === 1 ? 'bloco' : 'blocos'}</span>` : ''}
             <span class="history-chevron">▾</span>
           </div>
         </div>
