@@ -211,6 +211,7 @@ const statTotalTasks = document.getElementById('statTotalTasks');
 const statPendingTasks = document.getElementById('statPendingTasks');
 const statCompletedTasks = document.getElementById('statCompletedTasks');
 const statTotalTime = document.getElementById('statTotalTime');
+const statTotalPomodoros = document.getElementById('statTotalPomodoros');
 
 const activeTimerBanner = document.getElementById('activeTimerBanner');
 const activeTaskTitle = document.getElementById('activeTaskTitle');
@@ -224,6 +225,8 @@ const btnResetDefaults = document.getElementById('btnResetDefaults');
 // Modais de Timer e Alerta
 const timerFinishedModal = document.getElementById('timerFinishedModal');
 const finishedTaskName = document.getElementById('finishedTaskName');
+const finishedTaskPomodoroStats = document.getElementById('finishedTaskPomodoroStats');
+const btnFinishedNextBlock = document.getElementById('btnFinishedNextBlock');
 const btnFinishedAdd5Min = document.getElementById('btnFinishedAdd5Min');
 const btnFinishedCompleteTask = document.getElementById('btnFinishedCompleteTask');
 const btnFinishedDismiss = document.getElementById('btnFinishedDismiss');
@@ -323,6 +326,18 @@ function loadData() {
     tasks = JSON.parse(JSON.stringify(INITIAL_DEFAULT_TASKS));
   }
 
+  // Compatibilidade e inicialização de blocos Pomodoro
+  tasks.forEach(t => {
+    t.targetSeconds = t.targetSeconds || 1500;
+    if (t.pomodoroCount === undefined) {
+      t.pomodoroCount = Math.floor((t.elapsedSeconds || 0) / t.targetSeconds);
+    }
+    // Se a tarefa não está rodando e o bloco atual estava zerado ou indefinido, reseta para 0
+    if (t.blockElapsedSeconds === undefined || (!t.isRunning && t.blockElapsedSeconds >= t.targetSeconds)) {
+      t.blockElapsedSeconds = 0;
+    }
+  });
+
   // 3. Verifica virada automática do dia (Rollover à meia-noite)
   const todayKey = getTodayDateKey();
   const storedActiveDate = localStorage.getItem(ACTIVE_DATE_KEY);
@@ -404,6 +419,8 @@ function resetTasksForNewDay() {
     ...task,
     completed: false,
     elapsedSeconds: 0,
+    blockElapsedSeconds: 0,
+    pomodoroCount: 0,
     isRunning: false,
     timerStartedAt: null,
     subtasks: (task.subtasks || []).map(st => ({
@@ -493,14 +510,24 @@ function setupEventListeners() {
     });
   }
 
-  // Ações do Modal de Tempo Esgotado
+  // Ações do Modal de Bloco Concluído
+  if (btnFinishedNextBlock) {
+    btnFinishedNextBlock.addEventListener('click', () => {
+      if (currentFinishedTaskId) {
+        const id = currentFinishedTaskId;
+        closeTimerFinishedModal();
+        startTimer(id);
+      }
+    });
+  }
+
   if (btnFinishedAdd5Min) {
     btnFinishedAdd5Min.addEventListener('click', () => {
       if (currentFinishedTaskId) {
         const task = tasks.find(t => t.id === currentFinishedTaskId);
         if (task) {
           task.targetSeconds = (getTaskTargetSeconds(task)) + 300;
-          task.elapsedSeconds = task.targetSeconds - 300;
+          task.blockElapsedSeconds = Math.max(0, task.targetSeconds - 300);
           startTimer(task.id);
         }
       }
@@ -637,6 +664,8 @@ function handleCreateTask(e) {
     createdAt: Date.now(),
     targetSeconds: targetMins * 60,
     elapsedSeconds: 0,
+    blockElapsedSeconds: 0,
+    pomodoroCount: 0,
     isRunning: false,
     timerStartedAt: null,
     subtasks: [...initialSubtasks]
@@ -655,18 +684,18 @@ function handleCreateTask(e) {
   dbUpsertTask(newTask);
 }
 
-// Auxiliares de Contagem Regressiva
+// Auxiliares de Contagem Regressiva e Blocos Pomodoro
 function getTaskTargetSeconds(task) {
   return task.targetSeconds || 1500; // 25 min padrão (1500s)
 }
 
 function getTaskRemainingSeconds(task) {
   const target = getTaskTargetSeconds(task);
-  let elapsed = task.elapsedSeconds || 0;
+  let elapsedInBlock = task.blockElapsedSeconds || 0;
   if (task.isRunning && task.timerStartedAt) {
-    elapsed += Math.floor((Date.now() - task.timerStartedAt) / 1000);
+    elapsedInBlock += Math.floor((Date.now() - task.timerStartedAt) / 1000);
   }
-  return Math.max(0, target - elapsed);
+  return Math.max(0, target - elapsedInBlock);
 }
 
 // Obter tempo trabalhado total em segundos para métricas e relatórios
@@ -678,7 +707,7 @@ function getTaskCurrentSeconds(task) {
   return total;
 }
 
-// Controle do Timer (Contagem Regressiva)
+// Controle do Timer (Blocos Pomodoro)
 function startTimer(taskId) {
   requestNotificationPermission();
   const now = Date.now();
@@ -686,8 +715,9 @@ function startTimer(taskId) {
   // Pausa qualquer outro timer rodando para manter rastreamento único e preciso
   tasks.forEach(t => {
     if (t.isRunning && t.id !== taskId) {
-      const added = Math.floor((now - t.timerStartedAt) / 1000);
-      t.elapsedSeconds += Math.max(0, added);
+      const added = Math.max(0, Math.floor((now - t.timerStartedAt) / 1000));
+      t.elapsedSeconds = (t.elapsedSeconds || 0) + added;
+      t.blockElapsedSeconds = (t.blockElapsedSeconds || 0) + added;
       t.isRunning = false;
       t.timerStartedAt = null;
       dbUpsertTask(t);
@@ -696,10 +726,10 @@ function startTimer(taskId) {
 
   const task = tasks.find(t => t.id === taskId);
   if (task) {
-    // Se a contagem já havia zerado, reinicia do começo
+    // Se o bloco atual já estava em 0, reinicia o bloco do começo
     const remaining = getTaskRemainingSeconds(task);
     if (remaining <= 0) {
-      task.elapsedSeconds = 0;
+      task.blockElapsedSeconds = 0;
     }
     task.isRunning = true;
     task.timerStartedAt = now;
@@ -714,8 +744,9 @@ function pauseTimer(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (task && task.isRunning) {
     const now = Date.now();
-    const added = Math.floor((now - task.timerStartedAt) / 1000);
-    task.elapsedSeconds += Math.max(0, added);
+    const added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+    task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
+    task.blockElapsedSeconds = (task.blockElapsedSeconds || 0) + added;
     task.isRunning = false;
     task.timerStartedAt = null;
     saveTasks();
@@ -728,8 +759,12 @@ function resetTimer(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (task) {
     const mins = Math.round(getTaskTargetSeconds(task) / 60);
-    if (confirm(`Deseja reiniciar a contagem regressiva da tarefa "${task.title}" para ${mins} minutos?`)) {
-      task.elapsedSeconds = 0;
+    const pomodoros = task.pomodoroCount || 0;
+    const pomodoroNote = pomodoros > 0 
+      ? `\n\n(Seus ${pomodoros} bloco(s) já concluídos hoje e o tempo total trabalhado continuarão salvos).` 
+      : '';
+    if (confirm(`Deseja reiniciar a contagem do bloco atual da tarefa "${task.title}" para ${mins} minutos?${pomodoroNote}`)) {
+      task.blockElapsedSeconds = 0;
       task.isRunning = false;
       task.timerStartedAt = null;
       saveTasks();
@@ -873,7 +908,7 @@ function setTaskDuration(taskId, minutes) {
   const task = tasks.find(t => t.id === taskId);
   if (task) {
     task.targetSeconds = mins * 60;
-    task.elapsedSeconds = 0;
+    task.blockElapsedSeconds = 0;
     task.isRunning = false;
     task.timerStartedAt = null;
     saveTasks();
@@ -961,6 +996,16 @@ function sendTimerFinishedNotification(task) {
 function showTimerFinishedModal(task) {
   currentFinishedTaskId = task.id;
   if (finishedTaskName) finishedTaskName.textContent = `"${task.title}"`;
+  if (finishedTaskPomodoroStats) {
+    const count = task.pomodoroCount || 1;
+    const totalTime = formatReadableTime(task.elapsedSeconds || 0);
+    finishedTaskPomodoroStats.innerHTML = `
+      <div>🍅 <strong>${count}º bloco concluído hoje!</strong></div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+        Tempo total dedicado a esta tarefa hoje: <strong>${totalTime}</strong>
+      </div>
+    `;
+  }
   if (timerFinishedModal) timerFinishedModal.classList.remove('hidden');
 }
 
@@ -970,9 +1015,20 @@ function closeTimerFinishedModal() {
 }
 
 function finishCountdown(task) {
+  const now = Date.now();
+  let added = 0;
+  if (task.timerStartedAt) {
+    added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+  }
   task.isRunning = false;
   task.timerStartedAt = null;
-  task.elapsedSeconds = getTaskTargetSeconds(task);
+  task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
+
+  // Incrementa contagem de blocos concluídos
+  task.pomodoroCount = (task.pomodoroCount || 0) + 1;
+  // Reseta o bloco atual para 0 para que o próximo bloco fique pronto com tempo cheio
+  task.blockElapsedSeconds = 0;
+
   saveTasks();
   render();
   dbUpsertTask(task);
@@ -1124,14 +1180,19 @@ function updateMetrics() {
   const pending = total - completed;
 
   let totalSecs = 0;
+  let totalPomodoros = 0;
   tasks.forEach(t => {
     totalSecs += getTaskCurrentSeconds(t);
+    totalPomodoros += (t.pomodoroCount || 0);
   });
 
   statTotalTasks.textContent = total;
   statPendingTasks.textContent = pending;
   statCompletedTasks.textContent = completed;
   statTotalTime.textContent = formatReadableTime(totalSecs);
+  if (statTotalPomodoros) {
+    statTotalPomodoros.textContent = totalPomodoros;
+  }
   if (historyBadge) {
     historyBadge.textContent = Object.keys(dailyHistory).length;
   }
@@ -1171,7 +1232,8 @@ function renderTasks() {
     const remainingSecs = getTaskRemainingSeconds(task);
     const timeFormatted = formatTimeHMS(remainingSecs);
     const targetMins = Math.round(getTaskTargetSeconds(task) / 60);
-    const isFinished = remainingSecs === 0 && (task.elapsedSeconds || 0) > 0;
+    const pomodoroCount = task.pomodoroCount || 0;
+    const isFinished = isRunning && remainingSecs === 0;
 
     const subtasks = task.subtasks || [];
     const totalSub = subtasks.length;
@@ -1198,11 +1260,16 @@ function renderTasks() {
                 ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
+                ${pomodoroCount > 0 ? `
+                  <span class="badge badge-pomodoro" title="${pomodoroCount} bloco(s) de foco concluído(s) hoje • Total trabalhado: ${formatReadableTime(task.elapsedSeconds)}">
+                    🍅 ${pomodoroCount} ${pomodoroCount === 1 ? 'bloco' : 'blocos'} (${formatReadableTime(task.elapsedSeconds)})
+                  </span>
+                ` : ''}
               </div>
             </div>
           </div>
 
-          <!-- Timer Widget (Contagem Regressiva) -->
+          <!-- Timer Widget (Contagem Regressiva do Bloco) -->
           <div class="task-timer-area">
             <div class="timer-display-group">
               <span class="timer-digits countdown ${isRunning ? 'running' : ''} ${isFinished ? 'finished' : ''}" id="timer-display-${task.id}">
@@ -1212,7 +1279,7 @@ function renderTasks() {
                 type="button" 
                 class="btn-timer-config" 
                 onclick="openTimerConfig('${task.id}', event)" 
-                title="Alterar duração da contagem (atual: ${targetMins} min)"
+                title="Alterar duração do bloco Pomodoro (atual: ${targetMins} min)"
               >
                 ⏱️ ${targetMins}m
               </button>
@@ -1578,6 +1645,12 @@ function updateSyncStatus(status, text) {
 }
 
 function mapDbTaskToModel(row) {
+  const target = row.target_seconds ? Number(row.target_seconds) : 1500;
+  const elapsed = row.elapsed_seconds ? Number(row.elapsed_seconds) : 0;
+  const pomodoros = row.pomodoro_count !== undefined 
+    ? Number(row.pomodoro_count) 
+    : Math.floor(elapsed / target);
+
   return {
     id: row.id,
     title: row.title,
@@ -1586,8 +1659,10 @@ function mapDbTaskToModel(row) {
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
-    targetSeconds: row.target_seconds ? Number(row.target_seconds) : 1500,
-    elapsedSeconds: row.elapsed_seconds || 0,
+    targetSeconds: target,
+    elapsedSeconds: elapsed,
+    blockElapsedSeconds: 0,
+    pomodoroCount: pomodoros,
     isRunning: !!row.is_running,
     timerStartedAt: row.timer_started_at ? Number(row.timer_started_at) : null,
     subtasks: Array.isArray(row.subtasks) ? row.subtasks : []
@@ -1631,8 +1706,16 @@ async function fetchFromSupabase() {
         tasks = data.map(row => {
           const mapped = mapDbTaskToModel(row);
           const existing = localTasksMap.get(mapped.id);
-          if (existing && existing.targetSeconds && !row.target_seconds) {
-            mapped.targetSeconds = existing.targetSeconds;
+          if (existing) {
+            if (existing.targetSeconds && !row.target_seconds) {
+              mapped.targetSeconds = existing.targetSeconds;
+            }
+            if (existing.blockElapsedSeconds !== undefined) {
+              mapped.blockElapsedSeconds = existing.blockElapsedSeconds;
+            }
+            if (existing.pomodoroCount !== undefined && mapped.pomodoroCount === 0) {
+              mapped.pomodoroCount = existing.pomodoroCount;
+            }
           }
           return mapped;
         });
@@ -1714,6 +1797,12 @@ function handleRealtimeChange(payload) {
       const updated = mapDbTaskToModel(newRow);
       if (existing && existing.targetSeconds && !newRow.target_seconds) {
         updated.targetSeconds = existing.targetSeconds;
+      }
+      if (existing && existing.blockElapsedSeconds !== undefined) {
+        updated.blockElapsedSeconds = existing.blockElapsedSeconds;
+      }
+      if (existing && existing.pomodoroCount !== undefined) {
+        updated.pomodoroCount = Math.max(existing.pomodoroCount, updated.pomodoroCount);
       }
       tasks[idx] = updated;
       saveTasks();

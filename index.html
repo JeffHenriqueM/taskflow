@@ -101,6 +101,13 @@
           <span class="metric-value" id="statTotalTime">00h 00m</span>
         </div>
       </div>
+      <div class="metric-card">
+        <div class="metric-icon red">🍅</div>
+        <div class="metric-info">
+          <span class="metric-label">Blocos Concluídos</span>
+          <span class="metric-value" id="statTotalPomodoros">0</span>
+        </div>
+      </div>
     </section>
 
     <!-- Active Timer Banner (if running) -->
@@ -213,25 +220,29 @@
     </main>
   </div>
 
-  <!-- Modal: Tempo Esgotado / Alarme -->
+  <!-- Modal: Bloco Pomodoro Concluído -->
   <div id="timerFinishedModal" class="app-modal-overlay hidden">
     <div class="app-modal-card">
-      <div class="modal-alarm-icon">🔔</div>
-      <h2>Tempo Esgotado!</h2>
-      <p>A contagem regressiva da tarefa <strong id="finishedTaskName">Nome da Tarefa</strong> chegou ao fim!</p>
+      <div class="modal-alarm-icon pomodoro-alarm-icon">🍅</div>
+      <h2>Bloco Concluído!</h2>
+      <p>Você completou um bloco de foco na tarefa <strong id="finishedTaskName">Nome da Tarefa</strong>!</p>
+      <div class="pomodoro-modal-stats" id="finishedTaskPomodoroStats">
+        <!-- Estatísticas do bloco geradas dinamicamente -->
+      </div>
       <div class="modal-buttons-row">
+        <button type="button" id="btnFinishedNextBlock" class="btn btn-primary">▶ Iniciar Próximo Bloco</button>
         <button type="button" id="btnFinishedAdd5Min" class="btn btn-secondary">+ 5 Minutos</button>
         <button type="button" id="btnFinishedCompleteTask" class="btn btn-success">✅ Concluir Tarefa</button>
-        <button type="button" id="btnFinishedDismiss" class="btn btn-primary">Entendido</button>
+        <button type="button" id="btnFinishedDismiss" class="btn btn-secondary">Fechar</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Alterar Duração da Contagem -->
+  <!-- Modal: Alterar Duração do Bloco Pomodoro -->
   <div id="timerConfigModal" class="app-modal-overlay hidden">
     <div class="app-modal-card">
-      <h2>Definir Duração da Contagem</h2>
-      <p class="subtitle" id="timerConfigTaskTitle">Escolha o tempo desejado para esta tarefa</p>
+      <h2>Duração do Bloco de Foco</h2>
+      <p class="subtitle" id="timerConfigTaskTitle">Escolha a duração de cada bloco Pomodoro para esta tarefa</p>
       
       <div class="timer-presets-grid">
         <button type="button" class="preset-btn" onclick="applyTimerPreset(10)">10 min</button>
