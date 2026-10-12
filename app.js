@@ -482,9 +482,10 @@ function resetTasksForNewDay() {
       pomodoroCount: 0,
       isRunning: false,
       timerStartedAt: null,
+      // As subtarefas mantêm seu progresso intacto (as já concluídas continuam marcadas)
       subtasks: (task.subtasks || []).map(st => ({
         ...st,
-        completed: keepCompleted ? st.completed : false
+        completed: !!st.completed
       }))
     };
   });
