@@ -149,9 +149,25 @@
                   <option value="urgente">Urgente</option>
                 </select>
               </div>
-              <div class="form-group" style="max-width: 120px;">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="taskRecurrence">Recorrência</label>
+                <select id="taskRecurrence">
+                  <option value="diaria" selected>🔄 Diária (Todos os dias)</option>
+                  <option value="semanal">🔄 Semanal (Toda semana)</option>
+                  <option value="mensal">🔄 Mensal (Todo mês)</option>
+                  <option value="nenhuma">📌 Não se repete (Única)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="taskDueDate">Data de Entrega / Prazo</label>
+                <input type="date" id="taskDueDate" title="Defina um prazo final opcional para esta tarefa">
+              </div>
+              <div class="form-group" style="max-width: 130px;">
                 <label for="taskTimerMinutes">Duração (min)</label>
-                <input type="number" id="taskTimerMinutes" min="1" max="720" value="25" placeholder="25" title="Duração da contagem regressiva em minutos">
+                <input type="number" id="taskTimerMinutes" min="1" max="720" value="25" placeholder="25" title="Duração do bloco de foco Pomodoro em minutos">
               </div>
             </div>
 
@@ -164,7 +180,8 @@
             <div class="form-group">
               <label>Subtarefas Iniciais (Opcional)</label>
               <div class="subtask-input-wrapper">
-                <input type="text" id="initialSubtaskInput" placeholder="Digite uma subtarefa e tecle 'Adicionar' ou Enter">
+                <input type="text" id="initialSubtaskInput" class="flex-1" placeholder="Digite uma subtarefa...">
+                <input type="date" id="initialSubtaskDueDate" class="input-date-subtask" title="Data de entrega / prazo da subtarefa (opcional)">
                 <button type="button" id="btnAddInitialSubtask" class="btn btn-secondary">Adicionar</button>
               </div>
               <div id="initialSubtasksList" class="initial-subtasks-chips"></div>
@@ -283,6 +300,118 @@
         <button type="button" id="btnRerollRandomTask" class="btn btn-secondary">🎲 Sortear Outra</button>
         <button type="button" id="btnCloseRandomModal" class="btn btn-secondary">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Tarefa -->
+  <div id="editTaskModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card edit-task-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">✏️</span>
+          <h2>Editar Tarefa</h2>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeEditTaskModal()" title="Fechar">&times;</button>
+      </div>
+
+      <form id="editTaskForm" class="edit-task-form">
+        <input type="hidden" id="editTaskId">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="editTaskTitle">Título da Tarefa *</label>
+            <input type="text" id="editTaskTitle" required placeholder="Nome da tarefa">
+          </div>
+          <div class="form-group">
+            <label for="editTaskCategory">Categoria</label>
+            <input type="text" id="editTaskCategory" placeholder="Categoria">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editTaskPriority">Prioridade</label>
+            <select id="editTaskPriority">
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
+              <option value="urgente">Urgente</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editTaskRecurrence">Recorrência</label>
+            <select id="editTaskRecurrence">
+              <option value="diaria">🔄 Diária (Todos os dias)</option>
+              <option value="semanal">🔄 Semanal (Toda semana)</option>
+              <option value="mensal">🔄 Mensal (Todo mês)</option>
+              <option value="nenhuma">📌 Não se repete (Única)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editTaskDueDate">Data de Entrega / Prazo</label>
+            <input type="date" id="editTaskDueDate">
+          </div>
+          <div class="form-group" style="max-width: 120px;">
+            <label for="editTaskTimerMinutes">Duração (min)</label>
+            <input type="number" id="editTaskTimerMinutes" min="1" max="720" value="25" title="Duração do bloco Pomodoro">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="editTaskDescription">Descrição / Notas</label>
+          <textarea id="editTaskDescription" rows="2" placeholder="Observações, escopo ou links..."></textarea>
+        </div>
+
+        <!-- Subtarefas no Modal de Edição -->
+        <div class="form-group edit-subtasks-group">
+          <label>Gerenciar Subtarefas desta Tarefa</label>
+          <div class="subtask-input-wrapper">
+            <input type="text" id="editNewSubtaskInput" class="flex-1" placeholder="Nova subtarefa...">
+            <input type="date" id="editNewSubtaskDueDate" class="input-date-subtask" title="Prazo da subtarefa (opcional)">
+            <button type="button" id="btnEditAddSubtask" class="btn btn-secondary">Adicionar</button>
+          </div>
+          <div id="editSubtasksList" class="edit-subtasks-list">
+            <!-- Inserido dinamicamente via JS -->
+          </div>
+        </div>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Salvar Alterações</button>
+          <button type="button" class="btn btn-secondary" onclick="closeEditTaskModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Subtarefa -->
+  <div id="editSubtaskModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card edit-subtask-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">✏️</span>
+          <h2>Editar Subtarefa</h2>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeEditSubtaskModal()" title="Fechar">&times;</button>
+      </div>
+
+      <form id="editSubtaskForm" class="edit-subtask-form">
+        <input type="hidden" id="modalEditSubtaskId">
+        <input type="hidden" id="modalEditParentTaskId">
+
+        <div class="form-group">
+          <label for="modalEditSubtaskTitle">Título da Subtarefa *</label>
+          <input type="text" id="modalEditSubtaskTitle" required placeholder="Título da subtarefa">
+        </div>
+
+        <div class="form-group">
+          <label for="modalEditSubtaskDueDate">Data de Entrega / Prazo (Opcional)</label>
+          <input type="date" id="modalEditSubtaskDueDate">
+        </div>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Salvar Subtarefa</button>
+          <button type="button" class="btn btn-secondary" onclick="closeEditSubtaskModal()">Cancelar</button>
+        </div>
+      </form>
     </div>
   </div>
 

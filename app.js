@@ -197,9 +197,12 @@ const taskForm = document.getElementById('taskForm');
 const taskTitleInput = document.getElementById('taskTitle');
 const taskCategoryInput = document.getElementById('taskCategory');
 const taskPrioritySelect = document.getElementById('taskPriority');
+const taskRecurrenceSelect = document.getElementById('taskRecurrence');
+const taskDueDateInput = document.getElementById('taskDueDate');
 const taskTimerMinutesInput = document.getElementById('taskTimerMinutes');
 const taskDescriptionInput = document.getElementById('taskDescription');
 const initialSubtaskInput = document.getElementById('initialSubtaskInput');
+const initialSubtaskDueDateInput = document.getElementById('initialSubtaskDueDate');
 const btnAddInitialSubtask = document.getElementById('btnAddInitialSubtask');
 const initialSubtasksList = document.getElementById('initialSubtasksList');
 
@@ -245,9 +248,34 @@ const btnStartRandomTask = document.getElementById('btnStartRandomTask');
 const btnRerollRandomTask = document.getElementById('btnRerollRandomTask');
 const btnCloseRandomModal = document.getElementById('btnCloseRandomModal');
 
+// Modal de Edição de Tarefa Completa
+const editTaskModal = document.getElementById('editTaskModal');
+const editTaskForm = document.getElementById('editTaskForm');
+const editTaskIdInput = document.getElementById('editTaskId');
+const editTaskTitleInput = document.getElementById('editTaskTitle');
+const editTaskCategoryInput = document.getElementById('editTaskCategory');
+const editTaskPrioritySelect = document.getElementById('editTaskPriority');
+const editTaskRecurrenceSelect = document.getElementById('editTaskRecurrence');
+const editTaskDueDateInput = document.getElementById('editTaskDueDate');
+const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes');
+const editTaskDescriptionInput = document.getElementById('editTaskDescription');
+const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
+const editNewSubtaskDueDateInput = document.getElementById('editNewSubtaskDueDate');
+const btnEditAddSubtask = document.getElementById('btnEditAddSubtask');
+const editSubtasksList = document.getElementById('editSubtasksList');
+
+// Modal de Edição de Subtarefa
+const editSubtaskModal = document.getElementById('editSubtaskModal');
+const editSubtaskForm = document.getElementById('editSubtaskForm');
+const modalEditSubtaskIdInput = document.getElementById('modalEditSubtaskId');
+const modalEditParentTaskIdInput = document.getElementById('modalEditParentTaskId');
+const modalEditSubtaskTitleInput = document.getElementById('modalEditSubtaskTitle');
+const modalEditSubtaskDueDateInput = document.getElementById('modalEditSubtaskDueDate');
+
 let currentConfiguringTaskId = null;
 let currentFinishedTaskId = null;
 let currentRandomChosenTaskId = null;
+let editTaskTempSubtasks = [];
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -326,15 +354,22 @@ function loadData() {
     tasks = JSON.parse(JSON.stringify(INITIAL_DEFAULT_TASKS));
   }
 
-  // Compatibilidade e inicialização de blocos Pomodoro
+  // Compatibilidade e inicialização de blocos Pomodoro, recorrência e prazos
   tasks.forEach(t => {
     t.targetSeconds = t.targetSeconds || 1500;
+    t.recurrence = t.recurrence || 'diaria';
+    t.dueDate = t.dueDate || null;
     if (t.pomodoroCount === undefined) {
       t.pomodoroCount = Math.floor((t.elapsedSeconds || 0) / t.targetSeconds);
     }
     // Se a tarefa não está rodando e o bloco atual estava zerado ou indefinido, reseta para 0
     if (t.blockElapsedSeconds === undefined || (!t.isRunning && t.blockElapsedSeconds >= t.targetSeconds)) {
       t.blockElapsedSeconds = 0;
+    }
+    if (t.subtasks && Array.isArray(t.subtasks)) {
+      t.subtasks.forEach(st => {
+        st.dueDate = st.dueDate || null;
+      });
     }
   });
 
@@ -415,19 +450,25 @@ function archiveDay(dateKey, isManual = false) {
 }
 
 function resetTasksForNewDay() {
-  tasks = tasks.map(task => ({
-    ...task,
-    completed: false,
-    elapsedSeconds: 0,
-    blockElapsedSeconds: 0,
-    pomodoroCount: 0,
-    isRunning: false,
-    timerStartedAt: null,
-    subtasks: (task.subtasks || []).map(st => ({
-      ...st,
-      completed: false
-    }))
-  }));
+  tasks = tasks.map(task => {
+    // Tarefas únicas ('nenhuma' recorrência) que foram concluídas permanecem concluídas
+    const isSingleTask = task.recurrence === 'nenhuma';
+    const keepCompleted = isSingleTask && task.completed;
+
+    return {
+      ...task,
+      completed: keepCompleted ? true : false,
+      elapsedSeconds: 0,
+      blockElapsedSeconds: 0,
+      pomodoroCount: 0,
+      isRunning: false,
+      timerStartedAt: null,
+      subtasks: (task.subtasks || []).map(st => ({
+        ...st,
+        completed: keepCompleted ? st.completed : false
+      }))
+    };
+  });
   saveTasks();
   dbSyncAllTasks();
 }
@@ -592,6 +633,35 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Listeners dos Modais de Edição de Tarefas e Subtarefas
+  if (editTaskForm) {
+    editTaskForm.addEventListener('submit', handleSaveEditTask);
+  }
+  if (btnEditAddSubtask) {
+    btnEditAddSubtask.addEventListener('click', handleEditAddSubtask);
+  }
+  if (editNewSubtaskInput) {
+    editNewSubtaskInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEditAddSubtask();
+      }
+    });
+  }
+  if (editSubtaskForm) {
+    editSubtaskForm.addEventListener('submit', handleSaveEditSubtask);
+  }
+  if (editTaskModal) {
+    editTaskModal.addEventListener('click', (e) => {
+      if (e.target === editTaskModal) closeEditTaskModal();
+    });
+  }
+  if (editSubtaskModal) {
+    editSubtaskModal.addEventListener('click', (e) => {
+      if (e.target === editSubtaskModal) closeEditSubtaskModal();
+    });
+  }
 }
 
 // Alternância entre Hoje e Histórico
@@ -624,12 +694,16 @@ function addInitialSubtask() {
   const text = initialSubtaskInput.value.trim();
   if (!text) return;
 
+  const dueDate = initialSubtaskDueDateInput ? initialSubtaskDueDateInput.value : '';
+
   initialSubtasks.push({
     id: generateId(),
     title: text,
+    dueDate: dueDate || null,
     completed: false
   });
   initialSubtaskInput.value = '';
+  if (initialSubtaskDueDateInput) initialSubtaskDueDateInput.value = '';
   renderInitialSubtasksChips();
 }
 
@@ -641,7 +715,7 @@ function removeInitialSubtask(index) {
 function renderInitialSubtasksChips() {
   initialSubtasksList.innerHTML = initialSubtasks.map((st, i) => `
     <span class="subtask-chip">
-      <span>${escapeHtml(st.title)}</span>
+      <span>${escapeHtml(st.title)} ${st.dueDate ? `<small style="opacity: 0.8; font-size: 11px;">(📅 ${formatShortDate(st.dueDate)})</small>` : ''}</span>
       <button type="button" onclick="removeInitialSubtask(${i})" title="Remover">&times;</button>
     </span>
   `).join('');
@@ -653,12 +727,16 @@ function handleCreateTask(e) {
   if (!title) return;
 
   const targetMins = parseInt(taskTimerMinutesInput ? taskTimerMinutesInput.value : '25', 10) || 25;
+  const recurrence = taskRecurrenceSelect ? taskRecurrenceSelect.value : 'diaria';
+  const dueDate = taskDueDateInput ? taskDueDateInput.value : '';
 
   const newTask = {
     id: generateId(),
     title: title,
-    category: taskCategoryInput.value.trim(),
+    category: taskCategoryInput.value.trim() || 'Geral',
     priority: taskPrioritySelect.value || 'media',
+    recurrence: recurrence || 'diaria',
+    dueDate: dueDate || null,
     description: taskDescriptionInput.value.trim(),
     completed: false,
     createdAt: Date.now(),
@@ -677,11 +755,125 @@ function handleCreateTask(e) {
   // Reset form
   taskForm.reset();
   if (taskTimerMinutesInput) taskTimerMinutesInput.value = '25';
+  if (taskRecurrenceSelect) taskRecurrenceSelect.value = 'diaria';
+  if (taskDueDateInput) taskDueDateInput.value = '';
+  if (initialSubtaskDueDateInput) initialSubtaskDueDateInput.value = '';
   initialSubtasks = [];
   renderInitialSubtasksChips();
 
   render();
   dbUpsertTask(newTask);
+}
+
+// Auxiliares de Datas, Prazos e Badges
+function formatShortDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}`;
+    }
+    return dateStr;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+function formatFullDateDisplay(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+function getDueDateInfo(dueDateStr, isCompleted) {
+  if (!dueDateStr) return null;
+  const todayStr = getTodayDateKey();
+  
+  if (isCompleted) {
+    return {
+      status: 'done',
+      badgeClass: 'badge-due done',
+      label: `✓ Entregue (${formatShortDate(dueDateStr)})`,
+      title: `Prazo era ${formatFullDateDisplay(dueDateStr)}`
+    };
+  }
+
+  if (dueDateStr < todayStr) {
+    return {
+      status: 'overdue',
+      badgeClass: 'badge-due overdue',
+      label: `⚠️ Atrasada (${formatShortDate(dueDateStr)})`,
+      title: `Prazo venceu em ${formatFullDateDisplay(dueDateStr)}!`
+    };
+  }
+
+  if (dueDateStr === todayStr) {
+    return {
+      status: 'today',
+      badgeClass: 'badge-due today',
+      label: `⏳ Vence hoje!`,
+      title: `O prazo final desta tarefa é hoje (${formatFullDateDisplay(dueDateStr)})`
+    };
+  }
+
+  const diffTime = new Date(dueDateStr + 'T00:00:00') - new Date(todayStr + 'T00:00:00');
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 1) {
+    return {
+      status: 'tomorrow',
+      badgeClass: 'badge-due tomorrow',
+      label: `📅 Vence amanhã`,
+      title: `Prazo: ${formatFullDateDisplay(dueDateStr)}`
+    };
+  }
+
+  return {
+    status: 'future',
+    badgeClass: 'badge-due future',
+    label: `📅 Prazo: ${formatShortDate(dueDateStr)}`,
+    title: `Prazo de entrega: ${formatFullDateDisplay(dueDateStr)} (em ${diffDays} dias)`
+  };
+}
+
+function formatDueDateBadge(dueDateStr, isCompleted) {
+  const info = getDueDateInfo(dueDateStr, isCompleted);
+  if (!info) return '';
+  return `<span class="${info.badgeClass}" title="${escapeHtml(info.title)}">${info.label}</span>`;
+}
+
+function formatRecurrenceBadge(recurrence) {
+  switch (recurrence) {
+    case 'semanal':
+      return `<span class="badge badge-recurrence weekly" title="Repete semanalmente">🔄 Semanal</span>`;
+    case 'mensal':
+      return `<span class="badge badge-recurrence monthly" title="Repete mensalmente">🔄 Mensal</span>`;
+    case 'nenhuma':
+      return `<span class="badge badge-recurrence once" title="Tarefa pontual (não se repete)">📌 Única</span>`;
+    case 'diaria':
+    default:
+      return `<span class="badge badge-recurrence daily" title="Rotina diária (repete todos os dias)">🔄 Diária</span>`;
+  }
+}
+
+function formatSubtaskDueDateBadge(dueDateStr, isCompleted) {
+  if (!dueDateStr) return '';
+  const todayStr = getTodayDateKey();
+  
+  if (isCompleted) {
+    return `<span class="subtask-due-badge done" title="Prazo era ${formatFullDateDisplay(dueDateStr)}">✓ ${formatShortDate(dueDateStr)}</span>`;
+  }
+  if (dueDateStr < todayStr) {
+    return `<span class="subtask-due-badge overdue" title="Subtarefa atrasada! Venceu em ${formatFullDateDisplay(dueDateStr)}">⚠️ ${formatShortDate(dueDateStr)}</span>`;
+  }
+  if (dueDateStr === todayStr) {
+    return `<span class="subtask-due-badge today" title="Vence hoje (${formatFullDateDisplay(dueDateStr)})">⏳ Hoje</span>`;
+  }
+  return `<span class="subtask-due-badge future" title="Prazo: ${formatFullDateDisplay(dueDateStr)}">📅 ${formatShortDate(dueDateStr)}</span>`;
 }
 
 // Auxiliares de Contagem Regressiva e Blocos Pomodoro
@@ -1149,9 +1341,37 @@ function addSubtaskToTask(taskId, inputEl) {
     task.subtasks.push({
       id: generateId(),
       title: title,
+      dueDate: null,
       completed: false
     });
     inputEl.value = '';
+    saveTasks();
+    render();
+    dbUpsertTask(task);
+  }
+}
+
+function addInlineSubtask(taskId) {
+  const textInput = document.getElementById(`input-new-subtask-${taskId}`);
+  const dateInput = document.getElementById(`input-new-subtask-date-${taskId}`);
+  if (!textInput) return;
+
+  const title = textInput.value.trim();
+  if (!title) return;
+
+  const dueDate = dateInput ? dateInput.value : '';
+
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    if (!task.subtasks) task.subtasks = [];
+    task.subtasks.push({
+      id: generateId(),
+      title: title,
+      dueDate: dueDate || null,
+      completed: false
+    });
+    textInput.value = '';
+    if (dateInput) dateInput.value = '';
     saveTasks();
     render();
     dbUpsertTask(task);
@@ -1166,6 +1386,159 @@ function removeSubtaskFromTask(taskId, subtaskId) {
     render();
     dbUpsertTask(task);
   }
+}
+
+// ==========================================
+// Edição de Tarefas e Subtarefas (Modais)
+// ==========================================
+
+function openEditTaskModal(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  if (editTaskIdInput) editTaskIdInput.value = task.id;
+  if (editTaskTitleInput) editTaskTitleInput.value = task.title || '';
+  if (editTaskCategoryInput) editTaskCategoryInput.value = task.category || '';
+  if (editTaskPrioritySelect) editTaskPrioritySelect.value = task.priority || 'media';
+  if (editTaskRecurrenceSelect) editTaskRecurrenceSelect.value = task.recurrence || 'diaria';
+  if (editTaskDueDateInput) editTaskDueDateInput.value = task.dueDate || '';
+  if (editTaskTimerMinutesInput) editTaskTimerMinutesInput.value = Math.round(getTaskTargetSeconds(task) / 60);
+  if (editTaskDescriptionInput) editTaskDescriptionInput.value = task.description || '';
+
+  editTaskTempSubtasks = JSON.parse(JSON.stringify(task.subtasks || []));
+  if (editNewSubtaskInput) editNewSubtaskInput.value = '';
+  if (editNewSubtaskDueDateInput) editNewSubtaskDueDateInput.value = '';
+
+  renderEditSubtasksList();
+  if (editTaskModal) editTaskModal.classList.remove('hidden');
+}
+
+function closeEditTaskModal() {
+  if (editTaskModal) editTaskModal.classList.add('hidden');
+  editTaskTempSubtasks = [];
+}
+
+function handleEditAddSubtask() {
+  if (!editNewSubtaskInput) return;
+  const title = editNewSubtaskInput.value.trim();
+  if (!title) return;
+
+  const dueDate = editNewSubtaskDueDateInput ? editNewSubtaskDueDateInput.value : '';
+  editTaskTempSubtasks.push({
+    id: generateId(),
+    title: title,
+    dueDate: dueDate || null,
+    completed: false
+  });
+
+  editNewSubtaskInput.value = '';
+  if (editNewSubtaskDueDateInput) editNewSubtaskDueDateInput.value = '';
+  renderEditSubtasksList();
+}
+
+function removeEditSubtask(index) {
+  editTaskTempSubtasks.splice(index, 1);
+  renderEditSubtasksList();
+}
+
+function renderEditSubtasksList() {
+  if (!editSubtasksList) return;
+  if (editTaskTempSubtasks.length === 0) {
+    editSubtasksList.innerHTML = `<div style="font-size: 12px; color: var(--text-dim); padding: 8px 0;">Nenhuma subtarefa adicionada. Digite no campo acima para adicionar.</div>`;
+    return;
+  }
+
+  editSubtasksList.innerHTML = editTaskTempSubtasks.map((st, i) => `
+    <div class="edit-subtask-row">
+      <input 
+        type="text" 
+        value="${escapeHtml(st.title)}" 
+        placeholder="Subtarefa..." 
+        onchange="editTaskTempSubtasks[${i}].title = this.value.trim()"
+      >
+      <input 
+        type="date" 
+        value="${st.dueDate || ''}" 
+        title="Prazo da subtarefa"
+        onchange="editTaskTempSubtasks[${i}].dueDate = this.value || null"
+      >
+      <button type="button" class="btn-remove-edit-subtask" onclick="removeEditSubtask(${i})" title="Remover subtarefa">&times;</button>
+    </div>
+  `).join('');
+}
+
+function handleSaveEditTask(e) {
+  e.preventDefault();
+  const taskId = editTaskIdInput.value;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const newTitle = editTaskTitleInput.value.trim();
+  if (!newTitle) return;
+
+  const oldTarget = getTaskTargetSeconds(task);
+  const newTargetMins = parseInt(editTaskTimerMinutesInput ? editTaskTimerMinutesInput.value : '25', 10) || 25;
+  const newTargetSecs = newTargetMins * 60;
+
+  task.title = newTitle;
+  task.category = editTaskCategoryInput.value.trim() || 'Geral';
+  task.priority = editTaskPrioritySelect.value || 'media';
+  task.recurrence = editTaskRecurrenceSelect.value || 'diaria';
+  task.dueDate = editTaskDueDateInput.value || null;
+  task.description = editTaskDescriptionInput.value.trim();
+  task.subtasks = JSON.parse(JSON.stringify(editTaskTempSubtasks));
+
+  if (oldTarget !== newTargetSecs) {
+    task.targetSeconds = newTargetSecs;
+    if (!task.isRunning) {
+      task.blockElapsedSeconds = 0;
+    }
+  }
+
+  saveTasks();
+  render();
+  closeEditTaskModal();
+  dbUpsertTask(task);
+}
+
+// Edição Individual de Subtarefa
+function openEditSubtaskModal(taskId, subtaskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks) return;
+  const subtask = task.subtasks.find(st => st.id === subtaskId);
+  if (!subtask) return;
+
+  if (modalEditParentTaskIdInput) modalEditParentTaskIdInput.value = taskId;
+  if (modalEditSubtaskIdInput) modalEditSubtaskIdInput.value = subtaskId;
+  if (modalEditSubtaskTitleInput) modalEditSubtaskTitleInput.value = subtask.title || '';
+  if (modalEditSubtaskDueDateInput) modalEditSubtaskDueDateInput.value = subtask.dueDate || '';
+
+  if (editSubtaskModal) editSubtaskModal.classList.remove('hidden');
+}
+
+function closeEditSubtaskModal() {
+  if (editSubtaskModal) editSubtaskModal.classList.add('hidden');
+}
+
+function handleSaveEditSubtask(e) {
+  e.preventDefault();
+  const taskId = modalEditParentTaskIdInput.value;
+  const subtaskId = modalEditSubtaskIdInput.value;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks) return;
+  const subtask = task.subtasks.find(st => st.id === subtaskId);
+  if (!subtask) return;
+
+  const newTitle = modalEditSubtaskTitleInput.value.trim();
+  if (!newTitle) return;
+
+  subtask.title = newTitle;
+  subtask.dueDate = modalEditSubtaskDueDateInput.value || null;
+
+  saveTasks();
+  render();
+  closeEditSubtaskModal();
+  dbUpsertTask(task);
 }
 
 // Renderização Geral
@@ -1259,6 +1632,8 @@ function renderTasks() {
               <div class="task-meta-tags">
                 ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
+                ${formatRecurrenceBadge(task.recurrence || 'diaria')}
+                ${formatDueDateBadge(task.dueDate, task.completed)}
                 ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
                 ${pomodoroCount > 0 ? `
                   <span class="badge badge-pomodoro" title="${pomodoroCount} bloco(s) de foco concluído(s) hoje • Total trabalhado: ${formatReadableTime(task.elapsedSeconds)}">
@@ -1299,6 +1674,9 @@ function renderTasks() {
               </button>
             </div>
             <div class="task-actions">
+              <button class="btn-icon" onclick="openEditTaskModal('${task.id}')" title="Editar Tarefa">
+                ✏️
+              </button>
               <button class="btn-icon" onclick="deleteTask('${task.id}')" title="Excluir Tarefa">
                 🗑
               </button>
@@ -1329,10 +1707,16 @@ function renderTasks() {
                     onchange="toggleSubtask('${task.id}', '${st.id}')"
                   >
                   <span class="subtask-title">${escapeHtml(st.title)}</span>
+                  ${formatSubtaskDueDateBadge(st.dueDate, st.completed)}
                 </div>
-                <button class="btn-remove-subtask" onclick="removeSubtaskFromTask('${task.id}', '${st.id}')" title="Excluir subtarefa">
-                  &times;
-                </button>
+                <div class="subtask-item-actions">
+                  <button class="btn-edit-subtask" onclick="openEditSubtaskModal('${task.id}', '${st.id}')" title="Editar subtarefa">
+                    ✏️
+                  </button>
+                  <button class="btn-remove-subtask" onclick="removeSubtaskFromTask('${task.id}', '${st.id}')" title="Excluir subtarefa">
+                    &times;
+                  </button>
+                </div>
               </div>
             `).join('')}
 
@@ -1341,13 +1725,20 @@ function renderTasks() {
               <input 
                 type="text" 
                 id="input-new-subtask-${task.id}" 
-                placeholder="+ Adicionar subtarefa e pressionar Enter"
-                onkeydown="if(event.key==='Enter'){ addSubtaskToTask('${task.id}', this); }"
+                class="inline-subtask-text"
+                placeholder="+ Nova subtarefa..."
+                onkeydown="if(event.key==='Enter'){ addInlineSubtask('${task.id}'); }"
+              >
+              <input 
+                type="date" 
+                id="input-new-subtask-date-${task.id}" 
+                class="inline-subtask-date"
+                title="Prazo da subtarefa (opcional)"
               >
               <button 
                 type="button" 
                 class="btn btn-secondary btn-sm" 
-                onclick="addSubtaskToTask('${task.id}', document.getElementById('input-new-subtask-${task.id}'))"
+                onclick="addInlineSubtask('${task.id}')"
               >
                 Adicionar
               </button>
@@ -1656,6 +2047,8 @@ function mapDbTaskToModel(row) {
     title: row.title,
     category: row.category || 'Geral',
     priority: row.priority || 'media',
+    recurrence: row.recurrence || 'diaria',
+    dueDate: row.due_date || null,
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
@@ -1675,6 +2068,8 @@ function mapModelToDbTask(task) {
     title: task.title,
     category: task.category || 'Geral',
     priority: task.priority || 'media',
+    recurrence: task.recurrence || 'diaria',
+    due_date: task.dueDate || null,
     description: task.description || '',
     completed: !!task.completed,
     created_at: task.createdAt || Date.now(),
@@ -1699,7 +2094,16 @@ async function fetchFromSupabase() {
       if (data.length === 0 && tasks.length > 0) {
         // Banco no Supabase está vazio: envia as tarefas da rotina atual
         const rows = tasks.map(mapModelToDbTask);
-        await supabaseClient.from('tasks').upsert(rows);
+        const { error: upsertErr } = await supabaseClient.from('tasks').upsert(rows);
+        if (upsertErr && (upsertErr.code === '42703' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date'))))) {
+          const fallbackRows = rows.map(r => {
+            const copy = { ...r };
+            delete copy.recurrence;
+            delete copy.due_date;
+            return copy;
+          });
+          await supabaseClient.from('tasks').upsert(fallbackRows);
+        }
       } else if (data.length > 0) {
         // Atualiza tarefas locais com os dados do Supabase
         const localTasksMap = new Map(tasks.map(t => [t.id, t]));
@@ -1715,6 +2119,12 @@ async function fetchFromSupabase() {
             }
             if (existing.pomodoroCount !== undefined && mapped.pomodoroCount === 0) {
               mapped.pomodoroCount = existing.pomodoroCount;
+            }
+            if (!mapped.recurrence && existing.recurrence) {
+              mapped.recurrence = existing.recurrence;
+            }
+            if (!mapped.dueDate && existing.dueDate) {
+              mapped.dueDate = existing.dueDate;
             }
           }
           return mapped;
@@ -1804,6 +2214,12 @@ function handleRealtimeChange(payload) {
       if (existing && existing.pomodoroCount !== undefined) {
         updated.pomodoroCount = Math.max(existing.pomodoroCount, updated.pomodoroCount);
       }
+      if (!updated.recurrence && existing && existing.recurrence) {
+        updated.recurrence = existing.recurrence;
+      }
+      if (!updated.dueDate && existing && existing.dueDate) {
+        updated.dueDate = existing.dueDate;
+      }
       tasks[idx] = updated;
       saveTasks();
       render();
@@ -1822,7 +2238,19 @@ async function dbUpsertTask(task) {
   try {
     isSyncing = true;
     updateSyncStatus('syncing', 'Salvando...');
-    await supabaseClient.from('tasks').upsert(mapModelToDbTask(task));
+    const row = mapModelToDbTask(task);
+    const { error } = await supabaseClient.from('tasks').upsert(row);
+    if (error) {
+      if (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date')))) {
+        // Fallback caso a tabela ainda não tenha as colunas recurrence ou due_date criadas
+        const fallbackRow = { ...row };
+        delete fallbackRow.recurrence;
+        delete fallbackRow.due_date;
+        await supabaseClient.from('tasks').upsert(fallbackRow);
+      } else {
+        console.warn('Aviso ao sincronizar tarefa com Supabase:', error.message);
+      }
+    }
     updateSyncStatus('connected', 'Sincronizado');
   } catch (err) {
     console.error('Erro ao sincronizar tarefa com Supabase:', err);
@@ -1852,7 +2280,16 @@ async function dbSyncAllTasks() {
     isSyncing = true;
     updateSyncStatus('syncing', 'Sincronizando...');
     const rows = tasks.map(mapModelToDbTask);
-    await supabaseClient.from('tasks').upsert(rows);
+    const { error } = await supabaseClient.from('tasks').upsert(rows);
+    if (error && (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date'))))) {
+      const fallbackRows = rows.map(r => {
+        const copy = { ...r };
+        delete copy.recurrence;
+        delete copy.due_date;
+        return copy;
+      });
+      await supabaseClient.from('tasks').upsert(fallbackRows);
+    }
     updateSyncStatus('connected', 'Sincronizado');
   } catch (err) {
     console.error('Erro ao sincronizar tarefas:', err);
@@ -1880,3 +2317,25 @@ async function dbUpsertDailyHistory(entry) {
     // Silencia caso a tabela ainda não exista no Supabase
   }
 }
+
+// Exposição global para chamadas inline (HTML onclick / onchange)
+window.toggleTaskCompletion = toggleTaskCompletion;
+window.deleteTask = deleteTask;
+window.toggleSubtask = toggleSubtask;
+window.addSubtaskToTask = addSubtaskToTask;
+window.addInlineSubtask = addInlineSubtask;
+window.removeSubtaskFromTask = removeSubtaskFromTask;
+window.startTimer = startTimer;
+window.pauseTimer = pauseTimer;
+window.resetTimer = resetTimer;
+window.openTimerConfig = openTimerConfig;
+window.closeTimerConfigModal = closeTimerConfigModal;
+window.applyTimerPreset = applyTimerPreset;
+window.openEditTaskModal = openEditTaskModal;
+window.closeEditTaskModal = closeEditTaskModal;
+window.removeEditSubtask = removeEditSubtask;
+window.openEditSubtaskModal = openEditSubtaskModal;
+window.closeEditSubtaskModal = closeEditSubtaskModal;
+window.removeInitialSubtask = removeInitialSubtask;
+window.toggleHistoryCard = toggleHistoryCard;
+window.deleteHistoryDay = deleteHistoryDay;

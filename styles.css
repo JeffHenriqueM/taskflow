@@ -322,6 +322,8 @@ label {
 }
 
 input[type="text"],
+input[type="number"],
+input[type="date"],
 select,
 textarea {
   background: var(--bg-primary);
@@ -332,9 +334,12 @@ textarea {
   font-size: 14px;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
+  color-scheme: dark;
 }
 
 input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
 select:focus,
 textarea:focus {
   outline: none;
@@ -1629,4 +1634,289 @@ textarea {
   color: #f87171;
   font-size: 15px;
 }
+
+/* ==========================================
+   Recorrência de Tarefas (Badges)
+   ========================================== */
+.badge-recurrence {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.02em;
+}
+
+.badge-recurrence.daily {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.badge-recurrence.weekly {
+  background: rgba(139, 92, 246, 0.16);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.badge-recurrence.monthly {
+  background: rgba(14, 165, 233, 0.16);
+  color: #7dd3fc;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+.badge-recurrence.once {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* ==========================================
+   Data de Entrega / Prazos (Badges)
+   ========================================== */
+.badge-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.02em;
+  transition: all 0.2s ease;
+}
+
+.badge-due.overdue {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+  font-weight: 700;
+}
+
+.badge-due.today {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+  font-weight: 700;
+}
+
+.badge-due.tomorrow {
+  background: rgba(234, 179, 8, 0.16);
+  color: #fef08a;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+
+.badge-due.future {
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-due.done {
+  background: rgba(16, 185, 129, 0.12);
+  color: #86efac;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  text-decoration: none;
+}
+
+/* Subtask Due Date Badge */
+.subtask-due-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.subtask-due-badge.overdue {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.subtask-due-badge.today {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.subtask-due-badge.future {
+  background: rgba(148, 163, 184, 0.14);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.subtask-due-badge.done {
+  background: rgba(16, 185, 129, 0.12);
+  color: #86efac;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+/* Input date compacto para subtarefas */
+.input-date-subtask {
+  max-width: 140px;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+}
+
+.inline-subtask-date {
+  max-width: 130px;
+  padding: 6px 8px !important;
+  font-size: 12px !important;
+  border-radius: var(--radius-sm);
+}
+
+/* Subtask Item Actions */
+.subtask-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-edit-subtask {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 13px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit-subtask:hover {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* ==========================================
+   Modais de Edição de Tarefas e Subtarefas
+   ========================================== */
+.edit-task-modal-card {
+  max-width: 650px;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.edit-subtask-modal-card {
+  max-width: 440px;
+  text-align: left;
+}
+
+.modal-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-title-group h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.modal-badge-icon {
+  font-size: 20px;
+}
+
+.btn-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.btn-modal-close:hover {
+  color: #fff;
+  background: var(--bg-tertiary);
+}
+
+.edit-task-form,
+.edit-subtask-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.edit-subtasks-group {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  margin-top: 6px;
+}
+
+.edit-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.edit-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.edit-subtask-row input[type="text"] {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.edit-subtask-row input[type="date"] {
+  max-width: 130px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.btn-remove-edit-subtask {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.btn-remove-edit-subtask:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+}
+
 
