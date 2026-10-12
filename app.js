@@ -995,6 +995,13 @@ function resetTimer(taskId) {
 // Sorteio Aleatório de Tarefas (Menor Tempo de Execução)
 // ==========================================
 
+function isTaskUntouchedToday(task) {
+  const pomodoros = task.pomodoroCount || 0;
+  const currentSeconds = getTaskCurrentSeconds(task);
+  const blockElapsed = task.blockElapsedSeconds || 0;
+  return pomodoros === 0 && currentSeconds === 0 && blockElapsed === 0 && !task.isRunning;
+}
+
 function getTaskExecutionTime(task) {
   // O tempo de execução da tarefa é o tempo restante na contagem regressiva
   // Se ainda não começou, corresponde à duração total configurada (targetSeconds)
@@ -1010,6 +1017,14 @@ function pickRandomTask() {
     return;
   }
 
+  // Filtra apenas as tarefas pendentes que ainda não tiveram nada feito hoje (sem blocos nem tempo trabalhado)
+  const eligibleTasks = pendingTasks.filter(isTaskUntouchedToday);
+
+  if (eligibleTasks.length === 0) {
+    alert('✨ Todas as tarefas pendentes de hoje já tiveram blocos ou tempo de foco iniciados!\n\nNenhuma tarefa zerada restante para sortear hoje.');
+    return;
+  }
+
   // Se o filtro ativo for 'completed', alterna para 'all' para que a tarefa sorteada fique visível
   if (activeFilter === 'completed') {
     activeFilter = 'all';
@@ -1017,15 +1032,21 @@ function pickRandomTask() {
     renderTasks();
   }
 
-  // 1. Encontra o menor tempo de execução entre todas as tarefas pendentes (em segundos)
-  const minTime = Math.min(...pendingTasks.map(t => getTaskExecutionTime(t)));
+  // 1. Encontra o menor tempo de execução entre as tarefas elegíveis (em segundos)
+  const minTime = Math.min(...eligibleTasks.map(t => getTaskExecutionTime(t)));
 
   // 2. Filtra todas as tarefas candidatas que empatam com esse menor tempo
-  const candidates = pendingTasks.filter(t => getTaskExecutionTime(t) === minTime);
+  const candidates = eligibleTasks.filter(t => getTaskExecutionTime(t) === minTime);
 
-  // 3. Escolhe aleatoriamente entre as candidatas de menor tempo
-  const randomIndex = Math.floor(Math.random() * candidates.length);
-  const chosenTask = candidates[randomIndex];
+  // 3. Escolhe aleatoriamente entre as candidatas de menor tempo (evita repetir a mesma consecutivamente se houver opções)
+  let pool = candidates;
+  if (candidates.length > 1 && currentRandomChosenTaskId) {
+    const others = candidates.filter(t => t.id !== currentRandomChosenTaskId);
+    if (others.length > 0) pool = others;
+  }
+
+  const randomIndex = Math.floor(Math.random() * pool.length);
+  const chosenTask = pool[randomIndex];
 
   currentRandomChosenTaskId = chosenTask.id;
   showRandomTaskModal(chosenTask, minTime, candidates.length);
@@ -1038,13 +1059,17 @@ function showRandomTaskModal(task, minSeconds, totalCandidates) {
   const subtasks = task.subtasks || [];
   const completedSubs = subtasks.filter(s => s.completed).length;
 
+  if (randomModalSubtitle) {
+    randomModalSubtitle.textContent = 'Selecionada aleatoriamente entre as tarefas sem blocos iniciados hoje';
+  }
+
   randomPickedCard.innerHTML = `
     <div class="random-picked-header">
       <div class="random-picked-title">${escapeHtml(task.title)}</div>
     </div>
 
     <div class="random-picked-badges">
-      <span class="random-time-badge">⏱️ ${minMinutes} min de execução</span>
+      <span class="random-time-badge">⏱️ Bloco de ${minMinutes} min</span>
       ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
       <span class="badge badge-priority-${task.priority || 'media'}">${formatPriorityLabel(task.priority || 'media')}</span>
       ${subtasks.length > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 11px;">📋 ${completedSubs}/${subtasks.length} subtarefas</span>` : ''}
@@ -1054,8 +1079,8 @@ function showRandomTaskModal(task, minSeconds, totalCandidates) {
 
     <div class="random-info-note">
       ${totalCandidates > 1 
-        ? `<span>🎲 Havia <strong>${totalCandidates} tarefas</strong> com o menor tempo (${minMinutes}m). "${escapeHtml(task.title)}" foi a sorteada!</span>` 
-        : `<span>⭐ Esta é a tarefa pendente mais rápida para executar no momento (${minMinutes}m).</span>`
+        ? `<span>🎲 Havia <strong>${totalCandidates} tarefas</strong> sem blocos iniciados hoje (${minMinutes}m). "${escapeHtml(task.title)}" foi a sorteada!</span>` 
+        : `<span>⭐ Tarefa pendente sem blocos iniciados hoje (${minMinutes}m).</span>`
       }
     </div>
   `;

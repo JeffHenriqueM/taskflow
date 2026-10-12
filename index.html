@@ -207,7 +207,7 @@
             <button class="filter-btn" data-filter="pending">Pendentes</button>
             <button class="filter-btn" data-filter="completed">Concluídas</button>
           </div>
-          <button type="button" id="btnPickRandomTask" class="btn btn-random" title="Sortear uma tarefa com menor tempo de execução">
+          <button type="button" id="btnPickRandomTask" class="btn btn-random" title="Sortear entre as tarefas sem blocos iniciados hoje">
             <span class="random-dice-icon">🎲</span> Escolher Aleatoriamente
           </button>
         </section>
@@ -289,7 +289,7 @@
     <div class="app-modal-card random-modal-card">
       <div class="modal-alarm-icon random-modal-icon">🎲</div>
       <h2>Tarefa Sorteada!</h2>
-      <p class="subtitle" id="randomModalSubtitle">Selecionada aleatoriamente entre as de menor tempo de execução</p>
+      <p class="subtitle" id="randomModalSubtitle">Selecionada aleatoriamente entre as tarefas sem blocos iniciados hoje</p>
 
       <div class="random-picked-card" id="randomPickedCard">
         <!-- Inserido dinamicamente via JS -->
