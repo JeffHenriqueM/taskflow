@@ -216,6 +216,8 @@ const initialSubtasksList = document.getElementById('initialSubtasksList');
 const tasksContainer = document.getElementById('tasksContainer');
 const searchInput = document.getElementById('searchInput');
 const filterBtns = document.querySelectorAll('.filter-btn');
+const sortSelect = document.getElementById('sortSelect');
+let currentSort = localStorage.getItem('taskflow_sort') || 'default';
 
 const statTotalTasks = document.getElementById('statTotalTasks');
 const statPendingTasks = document.getElementById('statPendingTasks');
@@ -544,6 +546,16 @@ function setupEventListeners() {
     searchQuery = e.target.value.toLowerCase().trim();
     renderTasks();
   });
+
+  // Ordenação de Tarefas
+  if (sortSelect) {
+    sortSelect.value = currentSort;
+    sortSelect.addEventListener('change', (e) => {
+      currentSort = e.target.value;
+      localStorage.setItem('taskflow_sort', currentSort);
+      renderTasks();
+    });
+  }
 
   // Pausar do banner ativo
   btnPauseActiveTimer.addEventListener('click', () => {
@@ -1694,7 +1706,58 @@ function renderTasks() {
     return true;
   });
 
-  if (filtered.length === 0) {
+  // Ordenação das tarefas
+  const sorted = [...filtered].sort((a, b) => {
+    switch (currentSort) {
+      case 'pending-first': {
+        // Não concluídas (pendentes) primeiro
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        return 0;
+      }
+      case 'completed-first': {
+        // Concluídas primeiro
+        if (a.completed !== b.completed) {
+          return a.completed ? -1 : 1;
+        }
+        return 0;
+      }
+      case 'time-desc': {
+        // Mais tempo dedicado hoje (decrescente)
+        const timeA = getTaskCurrentSeconds(a);
+        const timeB = getTaskCurrentSeconds(b);
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.pomodoroCount || 0) - (a.pomodoroCount || 0);
+      }
+      case 'time-asc': {
+        // Menos tempo dedicado hoje (crescente)
+        const timeA = getTaskCurrentSeconds(a);
+        const timeB = getTaskCurrentSeconds(b);
+        if (timeA !== timeB) return timeA - timeB;
+        return (a.pomodoroCount || 0) - (b.pomodoroCount || 0);
+      }
+      case 'priority-desc': {
+        // Maior prioridade primeiro
+        const priorityWeight = { urgente: 4, alta: 3, media: 2, baixa: 1 };
+        const weightA = priorityWeight[a.priority] || 2;
+        const weightB = priorityWeight[b.priority] || 2;
+        return weightB - weightA;
+      }
+      case 'due-date': {
+        // Prazo mais próximo primeiro (sem prazo vai para o final)
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      }
+      case 'default':
+      default:
+        return 0;
+    }
+  });
+
+  if (sorted.length === 0) {
     tasksContainer.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📭</div>
@@ -1705,7 +1768,28 @@ function renderTasks() {
     return;
   }
 
-  tasksContainer.innerHTML = filtered.map(task => {
+  let hasInsertedDivider = false;
+  const completedCount = sorted.filter(t => t.completed).length;
+  const pendingCount = sorted.filter(t => !t.completed).length;
+
+  tasksContainer.innerHTML = sorted.map(task => {
+    let sectionDividerHtml = '';
+    if (currentSort === 'pending-first' && task.completed && !hasInsertedDivider && pendingCount > 0) {
+      hasInsertedDivider = true;
+      sectionDividerHtml = `
+        <div class="tasks-section-divider">
+          <span>✅ Concluídas (${completedCount})</span>
+        </div>
+      `;
+    } else if (currentSort === 'completed-first' && !task.completed && !hasInsertedDivider && completedCount > 0) {
+      hasInsertedDivider = true;
+      sectionDividerHtml = `
+        <div class="tasks-section-divider">
+          <span>⏳ Pendentes (${pendingCount})</span>
+        </div>
+      `;
+    }
+
     const isRunning = task.isRunning;
     const remainingSecs = getTaskRemainingSeconds(task);
     const timeFormatted = formatTimeHMS(remainingSecs);
@@ -1718,8 +1802,10 @@ function renderTasks() {
     const completedSub = subtasks.filter(st => st.completed).length;
     const percentSub = totalSub > 0 ? Math.round((completedSub / totalSub) * 100) : 0;
     const priorityKey = task.priority || 'media';
+    const dedicatedSeconds = getTaskCurrentSeconds(task);
 
     return `
+      ${sectionDividerHtml}
       <div class="task-card ${task.completed ? 'completed' : ''} ${isRunning ? 'is-running' : ''}" id="task-card-${task.id}">
         <!-- Header da Tarefa -->
         <div class="task-card-header">
@@ -1740,9 +1826,9 @@ function renderTasks() {
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
                 ${formatDueDateBadge(task.dueDate, task.completed)}
                 ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
-                ${pomodoroCount > 0 ? `
-                  <span class="badge badge-pomodoro" title="${pomodoroCount} bloco(s) de foco concluído(s) hoje • Total trabalhado: ${formatReadableTime(task.elapsedSeconds)}">
-                    🍅 ${pomodoroCount} ${pomodoroCount === 1 ? 'bloco' : 'blocos'} (${formatReadableTime(task.elapsedSeconds)})
+                ${(pomodoroCount > 0 || dedicatedSeconds > 0) ? `
+                  <span class="badge badge-pomodoro" title="${pomodoroCount} bloco(s) de foco hoje • Total dedicado: ${formatReadableTime(dedicatedSeconds)}">
+                    🍅 ${pomodoroCount > 0 ? `${pomodoroCount} ${pomodoroCount === 1 ? 'bloco' : 'blocos'} • ` : ''}${formatReadableTime(dedicatedSeconds)}
                   </span>
                 ` : ''}
               </div>

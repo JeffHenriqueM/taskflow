@@ -207,6 +207,21 @@
             <button class="filter-btn" data-filter="pending">Pendentes</button>
             <button class="filter-btn" data-filter="completed">Concluídas</button>
           </div>
+          <div class="sort-box">
+            <label for="sortSelect" class="sort-label" title="Organizar tarefas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M6 12h12m-9 6h6"/></svg>
+              <span>Organizar:</span>
+            </label>
+            <select id="sortSelect" class="sort-select" title="Escolha como organizar a lista de tarefas">
+              <option value="default">📋 Padrão</option>
+              <option value="pending-first">⏳ Não concluídas primeiro</option>
+              <option value="completed-first">✅ Concluídas primeiro</option>
+              <option value="time-desc">⏱️ Mais tempo dedicado</option>
+              <option value="time-asc">⏱️ Menos tempo dedicado</option>
+              <option value="priority-desc">🔥 Maior prioridade</option>
+              <option value="due-date">📅 Prazo mais próximo</option>
+            </select>
+          </div>
           <button type="button" id="btnPickRandomTask" class="btn btn-random" title="Sortear entre as tarefas sem blocos iniciados hoje">
             <span class="random-dice-icon">🎲</span> Escolher Aleatoriamente
           </button>

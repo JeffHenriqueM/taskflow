@@ -531,6 +531,83 @@ textarea {
   color: #fff;
 }
 
+/* Sort Control */
+.sort-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.sort-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sort-label svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.sort-select {
+  background: var(--bg-secondary);
+  color: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.sort-select:hover {
+  border-color: var(--primary);
+  background: var(--bg-tertiary);
+}
+
+.sort-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+.sort-select option {
+  background: var(--bg-card);
+  color: #fff;
+}
+
+/* Tasks Section Divider */
+.tasks-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 6px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tasks-section-divider::before,
+.tasks-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
 /* Tasks Container */
 .tasks-container {
   display: flex;
@@ -800,6 +877,29 @@ textarea {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  .tasks-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-box {
+    max-width: 100%;
+    min-width: 100%;
+  }
+  .filter-buttons {
+    width: 100%;
+    justify-content: center;
+  }
+  .sort-box {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .sort-select {
+    flex: 1;
+  }
+  .btn-random {
+    width: 100%;
+    justify-content: center;
+  }
   .task-card-header {
     flex-direction: column;
   }
