@@ -636,7 +636,9 @@ function setupEventListeners() {
 
   // Ações do Sorteio Aleatório de Tarefas
   if (btnPickRandomTask) {
-    btnPickRandomTask.addEventListener('click', pickRandomTask);
+    btnPickRandomTask.addEventListener('click', () => {
+      pickRandomTask(false);
+    });
   }
 
   if (btnStartRandomTask) {
@@ -652,7 +654,7 @@ function setupEventListeners() {
 
   if (btnRerollRandomTask) {
     btnRerollRandomTask.addEventListener('click', () => {
-      pickRandomTask();
+      pickRandomTask(true);
     });
   }
 
@@ -1021,7 +1023,7 @@ function getTaskExecutionTime(task) {
   return remaining > 0 ? remaining : getTaskTargetSeconds(task);
 }
 
-function pickRandomTask() {
+function pickRandomTask(isReroll = false) {
   const pendingTasks = tasks.filter(t => !t.completed);
 
   if (pendingTasks.length === 0) {
@@ -1044,30 +1046,67 @@ function pickRandomTask() {
     renderTasks();
   }
 
-  // 1. Encontra o menor tempo de execução entre as tarefas elegíveis (em segundos)
-  const minTime = Math.min(...eligibleTasks.map(t => getTaskExecutionTime(t)));
+  // Caso exista apenas 1 tarefa elegível no dia
+  if (eligibleTasks.length === 1) {
+    const singleTask = eligibleTasks[0];
+    currentRandomChosenTaskId = singleTask.id;
+    showRandomTaskModal(singleTask, getTaskExecutionTime(singleTask), 1);
+    if (isReroll) {
+      triggerRerollAnimation(true);
+    }
+    return;
+  }
 
-  // 2. Filtra todas as tarefas candidatas que empatam com esse menor tempo
-  const candidates = eligibleTasks.filter(t => getTaskExecutionTime(t) === minTime);
-
-  // 3. Escolhe aleatoriamente entre as candidatas de menor tempo (evita repetir a mesma consecutivamente se houver opções)
-  let pool = candidates;
-  if (candidates.length > 1 && currentRandomChosenTaskId) {
-    const others = candidates.filter(t => t.id !== currentRandomChosenTaskId);
-    if (others.length > 0) pool = others;
+  // Sorteia entre todas as tarefas elegíveis hoje, garantindo escolher uma DIFERENTE da atual
+  let pool = eligibleTasks;
+  if (currentRandomChosenTaskId) {
+    const others = eligibleTasks.filter(t => t.id !== currentRandomChosenTaskId);
+    if (others.length > 0) {
+      pool = others;
+    }
   }
 
   const randomIndex = Math.floor(Math.random() * pool.length);
   const chosenTask = pool[randomIndex];
 
   currentRandomChosenTaskId = chosenTask.id;
-  showRandomTaskModal(chosenTask, minTime, candidates.length);
+  showRandomTaskModal(chosenTask, getTaskExecutionTime(chosenTask), eligibleTasks.length);
+
+  if (isReroll) {
+    triggerRerollAnimation(false);
+  }
 }
 
-function showRandomTaskModal(task, minSeconds, totalCandidates) {
+function triggerRerollAnimation(isOnlyOne = false) {
+  const icon = document.querySelector('.random-modal-icon');
+  if (icon) {
+    icon.classList.remove('rolling');
+    void icon.offsetWidth; // Força reflow para reiniciar animação
+    icon.classList.add('rolling');
+  }
+
+  if (randomPickedCard) {
+    if (isOnlyOne) {
+      randomPickedCard.classList.remove('shake-card');
+      void randomPickedCard.offsetWidth;
+      randomPickedCard.classList.add('shake-card');
+
+      const infoNote = randomPickedCard.querySelector('.random-info-note');
+      if (infoNote) {
+        infoNote.innerHTML = `<span style="color: #f59e0b; font-weight: 600;">⚠️ Esta é a única tarefa pendente sem blocos hoje. Não há outra para sortear!</span>`;
+      }
+    } else {
+      randomPickedCard.classList.remove('card-reroll');
+      void randomPickedCard.offsetWidth;
+      randomPickedCard.classList.add('card-reroll');
+    }
+  }
+}
+
+function showRandomTaskModal(task, executionSeconds, totalCandidates) {
   if (!randomTaskModal || !randomPickedCard) return;
 
-  const minMinutes = Math.max(1, Math.round(minSeconds / 60));
+  const taskMinutes = Math.max(1, Math.round(executionSeconds / 60));
   const subtasks = task.subtasks || [];
   const completedSubs = subtasks.filter(s => s.completed).length;
 
@@ -1081,7 +1120,7 @@ function showRandomTaskModal(task, minSeconds, totalCandidates) {
     </div>
 
     <div class="random-picked-badges">
-      <span class="random-time-badge">⏱️ Bloco de ${minMinutes} min</span>
+      <span class="random-time-badge">⏱️ Bloco de ${taskMinutes} min</span>
       ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
       <span class="badge badge-priority-${task.priority || 'media'}">${formatPriorityLabel(task.priority || 'media')}</span>
       ${subtasks.length > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 11px;">📋 ${completedSubs}/${subtasks.length} subtarefas</span>` : ''}
@@ -1091,8 +1130,8 @@ function showRandomTaskModal(task, minSeconds, totalCandidates) {
 
     <div class="random-info-note">
       ${totalCandidates > 1 
-        ? `<span>🎲 Havia <strong>${totalCandidates} tarefas</strong> sem blocos iniciados hoje (${minMinutes}m). "${escapeHtml(task.title)}" foi a sorteada!</span>` 
-        : `<span>⭐ Tarefa pendente sem blocos iniciados hoje (${minMinutes}m).</span>`
+        ? `<span>🎲 Sorteada entre <strong>${totalCandidates} tarefas</strong> sem blocos hoje (${taskMinutes}m).</span>` 
+        : `<span>⭐ Esta é a <strong>única tarefa</strong> pendente sem blocos hoje (${taskMinutes}m).</span>`
       }
     </div>
   `;
