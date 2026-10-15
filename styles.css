@@ -280,16 +280,141 @@ h1 {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 22px;
-  margin-bottom: 28px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
   box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.task-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 0;
+  border-radius: var(--radius-sm);
+  transition: opacity 0.2s;
+}
+
+.task-form-header:hover {
+  opacity: 0.92;
+}
+
+.task-form-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.task-form-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary);
+  border-radius: 8px;
+  font-size: 13px;
 }
 
 .task-form-card h2 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin: 0;
   color: #fff;
+}
+
+.task-form-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+}
+
+.task-form-header-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.task-form-toggle-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.btn-toggle-form {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-form:hover {
+  background: var(--bg-secondary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.toggle-chevron {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Quando colapsado/minimizado */
+.task-form-card.collapsed {
+  padding: 14px 22px;
+  background: rgba(30, 41, 59, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.task-form-card.collapsed:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.task-form-card.collapsed .task-form {
+  display: none;
+}
+
+.task-form-card.collapsed .toggle-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Quando expandido */
+.task-form-card:not(.collapsed) .task-form {
+  margin-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 16px;
+  animation: fadeInForm 0.25s ease-out;
+}
+
+.task-form-card:not(.collapsed) .toggle-chevron {
+  transform: rotate(0deg);
+}
+
+@keyframes fadeInForm {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .task-form {

@@ -201,6 +201,10 @@ const historyView = document.getElementById('historyView');
 const historyListContainer = document.getElementById('historyListContainer');
 const historyOverallBadge = document.getElementById('historyOverallBadge');
 
+const taskFormCard = document.getElementById('taskFormCard');
+const taskFormHeader = document.getElementById('taskFormHeader');
+const btnToggleTaskForm = document.getElementById('btnToggleTaskForm');
+const taskFormToggleText = document.getElementById('taskFormToggleText');
 const taskForm = document.getElementById('taskForm');
 const taskTitleInput = document.getElementById('taskTitle');
 const taskCategoryInput = document.getElementById('taskCategory');
@@ -214,6 +218,45 @@ const initialSubtaskInput = document.getElementById('initialSubtaskInput');
 const initialSubtaskDueDateInput = document.getElementById('initialSubtaskDueDate');
 const btnAddInitialSubtask = document.getElementById('btnAddInitialSubtask');
 const initialSubtasksList = document.getElementById('initialSubtasksList');
+
+function setTaskFormMinimized(isMinimized) {
+  if (!taskFormCard) return;
+  taskFormCard.classList.toggle('collapsed', isMinimized);
+  if (taskFormToggleText) {
+    taskFormToggleText.textContent = isMinimized ? 'Expandir' : 'Minimizar';
+  }
+  localStorage.setItem('taskflow_form_minimized', isMinimized ? 'true' : 'false');
+}
+
+function toggleTaskForm() {
+  if (!taskFormCard) return;
+  const willBeMinimized = !taskFormCard.classList.contains('collapsed');
+  setTaskFormMinimized(willBeMinimized);
+}
+
+function initTaskFormState() {
+  const savedState = localStorage.getItem('taskflow_form_minimized');
+  // Por padrão começa minimizado conforme solicitado
+  const isMinimized = savedState !== 'false';
+  setTaskFormMinimized(isMinimized);
+
+  if (taskFormHeader) {
+    taskFormHeader.addEventListener('click', toggleTaskForm);
+    taskFormHeader.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleTaskForm();
+      }
+    });
+  }
+
+  if (btnToggleTaskForm) {
+    btnToggleTaskForm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTaskForm();
+    });
+  }
+}
 
 const tasksContainer = document.getElementById('tasksContainer');
 const searchInput = document.getElementById('searchInput');
@@ -583,6 +626,9 @@ function generateId() {
 
 // Configurar Listeners
 function setupEventListeners() {
+  // Controle de formulário colapsável
+  initTaskFormState();
+
   // Subtarefas no formulário de criação
   btnAddInitialSubtask.addEventListener('click', addInitialSubtask);
   initialSubtaskInput.addEventListener('keydown', (e) => {
@@ -962,6 +1008,7 @@ function handleCreateTask(e) {
   renderInitialSubtasksChips();
 
   render();
+  setTaskFormMinimized(true);
   dbUpsertTask(newTask);
 }
 

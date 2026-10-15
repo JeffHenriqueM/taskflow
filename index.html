@@ -128,8 +128,22 @@
       <!-- Today View (Daily Routine) -->
       <div id="todayView">
         <!-- Form to add task -->
-        <section class="task-form-card">
-          <h2>Adicionar Nova Tarefa à Rotina</h2>
+        <section class="task-form-card collapsed" id="taskFormCard">
+          <div class="task-form-header" id="taskFormHeader" role="button" tabindex="0" title="Clique para expandir ou minimizar o formulário">
+            <div class="task-form-title-group">
+              <span class="task-form-icon">➕</span>
+              <h2>Adicionar Nova Tarefa à Rotina</h2>
+              <span class="task-form-badge">Nova Tarefa</span>
+            </div>
+            <div class="task-form-header-action">
+              <span class="task-form-toggle-text" id="taskFormToggleText">Expandir</span>
+              <button type="button" id="btnToggleTaskForm" class="btn-toggle-form" aria-label="Minimizar ou expandir formulário">
+                <svg class="toggle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
           <form id="taskForm" class="task-form">
             <div class="form-row">
               <div class="form-group flex-1">
