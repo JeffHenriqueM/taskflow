@@ -215,6 +215,7 @@ const taskDueDateInput = document.getElementById('taskDueDate');
 const taskTimerMinutesInput = document.getElementById('taskTimerMinutes');
 const taskDescriptionInput = document.getElementById('taskDescription');
 const initialSubtaskInput = document.getElementById('initialSubtaskInput');
+const initialSubtaskRecurrenceSelect = document.getElementById('initialSubtaskRecurrence');
 const initialSubtaskDueDateInput = document.getElementById('initialSubtaskDueDate');
 const btnAddInitialSubtask = document.getElementById('btnAddInitialSubtask');
 const initialSubtasksList = document.getElementById('initialSubtasksList');
@@ -318,6 +319,7 @@ const editTaskDueDateInput = document.getElementById('editTaskDueDate');
 const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes');
 const editTaskDescriptionInput = document.getElementById('editTaskDescription');
 const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
+const editNewSubtaskRecurrenceSelect = document.getElementById('editNewSubtaskRecurrence');
 const editNewSubtaskDueDateInput = document.getElementById('editNewSubtaskDueDate');
 const btnEditAddSubtask = document.getElementById('btnEditAddSubtask');
 const editSubtasksList = document.getElementById('editSubtasksList');
@@ -328,6 +330,7 @@ const editSubtaskForm = document.getElementById('editSubtaskForm');
 const modalEditSubtaskIdInput = document.getElementById('modalEditSubtaskId');
 const modalEditParentTaskIdInput = document.getElementById('modalEditParentTaskId');
 const modalEditSubtaskTitleInput = document.getElementById('modalEditSubtaskTitle');
+const modalEditSubtaskRecurrenceSelect = document.getElementById('modalEditSubtaskRecurrence');
 const modalEditSubtaskDueDateInput = document.getElementById('modalEditSubtaskDueDate');
 
 let currentConfiguringTaskId = null;
@@ -463,6 +466,7 @@ function loadData() {
     if (t.subtasks && Array.isArray(t.subtasks)) {
       t.subtasks.forEach(st => {
         st.dueDate = st.dueDate || null;
+        st.recurrence = st.recurrence || getSubtaskRecurrence(st);
       });
     }
   });
@@ -585,11 +589,16 @@ function resetTasksForNewDay() {
       pomodoroCount: 0,
       isRunning: false,
       timerStartedAt: null,
-      // As subtarefas mantêm seu progresso intacto (as já concluídas continuam marcadas)
-      subtasks: (task.subtasks || []).map(st => ({
-        ...st,
-        completed: !!st.completed
-      }))
+      // Subtarefas diárias renovam (desmarcam), enquanto únicas e semanais mantêm status
+      subtasks: (task.subtasks || []).map(st => {
+        const rec = st.recurrence || getSubtaskRecurrence(st);
+        const isDaily = rec === 'diaria';
+        return {
+          ...st,
+          recurrence: rec,
+          completed: isDaily ? false : !!st.completed
+        };
+      })
     };
   });
   saveTasks();
@@ -887,11 +896,13 @@ function addInitialSubtask() {
   const text = initialSubtaskInput.value.trim();
   if (!text) return;
 
+  const recurrence = initialSubtaskRecurrenceSelect ? initialSubtaskRecurrenceSelect.value : 'diaria';
   const dueDate = initialSubtaskDueDateInput ? initialSubtaskDueDateInput.value : '';
 
   initialSubtasks.push({
     id: generateId(),
     title: text,
+    recurrence: recurrence,
     dueDate: dueDate || null,
     completed: false
   });
@@ -906,12 +917,16 @@ function removeInitialSubtask(index) {
 }
 
 function renderInitialSubtasksChips() {
-  initialSubtasksList.innerHTML = initialSubtasks.map((st, i) => `
-    <span class="subtask-chip">
-      <span>${escapeHtml(st.title)} ${st.dueDate ? `<small style="opacity: 0.8; font-size: 11px;">(📅 ${formatShortDate(st.dueDate)})</small>` : ''}</span>
-      <button type="button" onclick="removeInitialSubtask(${i})" title="Remover">&times;</button>
-    </span>
-  `).join('');
+  initialSubtasksList.innerHTML = initialSubtasks.map((st, i) => {
+    const rec = st.recurrence || 'diaria';
+    const recLabel = rec === 'diaria' ? '🔄 Diária' : (rec === 'semanal' ? '🔄 Semanal' : '📌 Única');
+    return `
+      <span class="subtask-chip">
+        <span>${escapeHtml(st.title)} <small class="chip-rec-badge">${recLabel}</small> ${st.dueDate ? `<small style="opacity: 0.8; font-size: 11px;">(📅 ${formatShortDate(st.dueDate)})</small>` : ''}</span>
+        <button type="button" onclick="removeInitialSubtask(${i})" title="Remover">&times;</button>
+      </span>
+    `;
+  }).join('');
 }
 
 function getSelectedCategory(selectEl, customInputEl) {
@@ -1121,6 +1136,67 @@ function formatSubtaskDueDateBadge(dueDateStr, isCompleted) {
     return `<span class="subtask-due-badge today" title="Vence hoje (${formatFullDateDisplay(dueDateStr)})">⏳ Hoje</span>`;
   }
   return `<span class="subtask-due-badge future" title="Prazo: ${formatFullDateDisplay(dueDateStr)}">📅 ${formatShortDate(dueDateStr)}</span>`;
+}
+
+function getSubtaskRecurrence(st) {
+  if (st && st.recurrence) return st.recurrence;
+  const titleLower = ((st && st.title) || '').toLowerCase();
+  if (
+    titleLower.includes('diário') || titleLower.includes('diario') ||
+    titleLower.includes('diária') || titleLower.includes('diaria') ||
+    titleLower.includes('café') || titleLower.includes('cafe') ||
+    titleLower.includes('almoço') || titleLower.includes('almoco') ||
+    titleLower.includes('janta') || titleLower.includes('jantar')
+  ) {
+    return 'diaria';
+  }
+  if (titleLower.includes('semanal')) {
+    return 'semanal';
+  }
+  return 'nenhuma';
+}
+
+function formatSubtaskRecurrenceBadge(recurrence, taskId, subtaskId) {
+  const rec = recurrence || 'nenhuma';
+  let badgeClass = 'once';
+  let label = '📌 Única';
+  let title = 'Subtarefa única (não repete). Clique para alternar para Diária.';
+
+  if (rec === 'diaria') {
+    badgeClass = 'daily';
+    label = '🔄 Diária';
+    title = 'Subtarefa diária (renova a cada dia). Clique para alternar para Semanal.';
+  } else if (rec === 'semanal') {
+    badgeClass = 'weekly';
+    label = '🔄 Semanal';
+    title = 'Subtarefa semanal. Clique para alternar para Única.';
+  }
+
+  return `<button type="button" class="subtask-recurrence-badge ${badgeClass}" onclick="toggleSubtaskRecurrence('${taskId}', '${subtaskId}', event)" title="${title}">${label}</button>`;
+}
+
+function toggleSubtaskRecurrence(taskId, subtaskId, e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks) return;
+  const st = task.subtasks.find(s => s.id === subtaskId);
+  if (!st) return;
+
+  const currentRec = st.recurrence || getSubtaskRecurrence(st);
+  if (currentRec === 'diaria') {
+    st.recurrence = 'semanal';
+  } else if (currentRec === 'semanal') {
+    st.recurrence = 'nenhuma';
+  } else {
+    st.recurrence = 'diaria';
+  }
+
+  saveTasks();
+  render();
+  dbUpsertTask(task);
 }
 
 // Auxiliares de Contagem Regressiva e Blocos Pomodoro
@@ -1780,12 +1856,14 @@ function addSubtaskToTask(taskId, inputEl) {
 
 function addInlineSubtask(taskId) {
   const textInput = document.getElementById(`input-new-subtask-${taskId}`);
+  const recInput = document.getElementById(`input-new-subtask-rec-${taskId}`);
   const dateInput = document.getElementById(`input-new-subtask-date-${taskId}`);
   if (!textInput) return;
 
   const title = textInput.value.trim();
   if (!title) return;
 
+  const recurrence = recInput ? recInput.value : 'diaria';
   const dueDate = dateInput ? dateInput.value : '';
 
   const task = tasks.find(t => t.id === taskId);
@@ -1794,6 +1872,7 @@ function addInlineSubtask(taskId) {
     task.subtasks.push({
       id: generateId(),
       title: title,
+      recurrence: recurrence,
       dueDate: dueDate || null,
       completed: false
     });
@@ -1867,10 +1946,12 @@ function handleEditAddSubtask() {
   const title = editNewSubtaskInput.value.trim();
   if (!title) return;
 
+  const recurrence = editNewSubtaskRecurrenceSelect ? editNewSubtaskRecurrenceSelect.value : 'diaria';
   const dueDate = editNewSubtaskDueDateInput ? editNewSubtaskDueDateInput.value : '';
   editTaskTempSubtasks.push({
     id: generateId(),
     title: title,
+    recurrence: recurrence,
     dueDate: dueDate || null,
     completed: false
   });
@@ -1892,23 +1973,35 @@ function renderEditSubtasksList() {
     return;
   }
 
-  editSubtasksList.innerHTML = editTaskTempSubtasks.map((st, i) => `
-    <div class="edit-subtask-row">
-      <input 
-        type="text" 
-        value="${escapeHtml(st.title)}" 
-        placeholder="Subtarefa..." 
-        onchange="editTaskTempSubtasks[${i}].title = this.value.trim()"
-      >
-      <input 
-        type="date" 
-        value="${st.dueDate || ''}" 
-        title="Prazo da subtarefa"
-        onchange="editTaskTempSubtasks[${i}].dueDate = this.value || null"
-      >
-      <button type="button" class="btn-remove-edit-subtask" onclick="removeEditSubtask(${i})" title="Remover subtarefa">&times;</button>
-    </div>
-  `).join('');
+  editSubtasksList.innerHTML = editTaskTempSubtasks.map((st, i) => {
+    const rec = st.recurrence || getSubtaskRecurrence(st);
+    return `
+      <div class="edit-subtask-row">
+        <input 
+          type="text" 
+          value="${escapeHtml(st.title)}" 
+          placeholder="Subtarefa..." 
+          onchange="editTaskTempSubtasks[${i}].title = this.value.trim()"
+        >
+        <select 
+          class="edit-subtask-select-rec" 
+          title="Recorrência da subtarefa"
+          onchange="editTaskTempSubtasks[${i}].recurrence = this.value"
+        >
+          <option value="diaria" ${rec === 'diaria' ? 'selected' : ''}>🔄 Diária</option>
+          <option value="nenhuma" ${rec === 'nenhuma' ? 'selected' : ''}>📌 Única</option>
+          <option value="semanal" ${rec === 'semanal' ? 'selected' : ''}>🔄 Semanal</option>
+        </select>
+        <input 
+          type="date" 
+          value="${st.dueDate || ''}" 
+          title="Prazo da subtarefa"
+          onchange="editTaskTempSubtasks[${i}].dueDate = this.value || null"
+        >
+        <button type="button" class="btn-remove-edit-subtask" onclick="removeEditSubtask(${i})" title="Remover subtarefa">&times;</button>
+      </div>
+    `;
+  }).join('');
 }
 
 function handleSaveEditTask(e) {
@@ -1955,6 +2048,7 @@ function openEditSubtaskModal(taskId, subtaskId) {
   if (modalEditParentTaskIdInput) modalEditParentTaskIdInput.value = taskId;
   if (modalEditSubtaskIdInput) modalEditSubtaskIdInput.value = subtaskId;
   if (modalEditSubtaskTitleInput) modalEditSubtaskTitleInput.value = subtask.title || '';
+  if (modalEditSubtaskRecurrenceSelect) modalEditSubtaskRecurrenceSelect.value = subtask.recurrence || getSubtaskRecurrence(subtask);
   if (modalEditSubtaskDueDateInput) modalEditSubtaskDueDateInput.value = subtask.dueDate || '';
 
   if (editSubtaskModal) editSubtaskModal.classList.remove('hidden');
@@ -1977,6 +2071,9 @@ function handleSaveEditSubtask(e) {
   if (!newTitle) return;
 
   subtask.title = newTitle;
+  if (modalEditSubtaskRecurrenceSelect) {
+    subtask.recurrence = modalEditSubtaskRecurrenceSelect.value;
+  }
   subtask.dueDate = modalEditSubtaskDueDateInput.value || null;
 
   saveTasks();
@@ -2286,6 +2383,7 @@ function renderTasks() {
                     onchange="toggleSubtask('${task.id}', '${st.id}')"
                   >
                   <span class="subtask-title">${escapeHtml(st.title)}</span>
+                  ${formatSubtaskRecurrenceBadge(st.recurrence || getSubtaskRecurrence(st), task.id, st.id)}
                   ${formatSubtaskDueDateBadge(st.dueDate, st.completed)}
                 </div>
                 <div class="subtask-item-actions">
@@ -2308,6 +2406,11 @@ function renderTasks() {
                 placeholder="+ Nova subtarefa..."
                 onkeydown="if(event.key==='Enter'){ addInlineSubtask('${task.id}'); }"
               >
+              <select id="input-new-subtask-rec-${task.id}" class="inline-subtask-recurrence" title="Recorrência da subtarefa">
+                <option value="diaria" selected>🔄 Diária</option>
+                <option value="nenhuma">📌 Única</option>
+                <option value="semanal">🔄 Semanal</option>
+              </select>
               <input 
                 type="date" 
                 id="input-new-subtask-date-${task.id}" 
@@ -2584,6 +2687,7 @@ window.removeInitialSubtask = removeInitialSubtask;
 window.toggleTaskCompletion = toggleTaskCompletion;
 window.deleteTask = deleteTask;
 window.toggleSubtask = toggleSubtask;
+window.toggleSubtaskRecurrence = toggleSubtaskRecurrence;
 window.addSubtaskToTask = addSubtaskToTask;
 window.removeSubtaskFromTask = removeSubtaskFromTask;
 window.startTimer = startTimer;
@@ -2654,7 +2758,10 @@ function mapDbTaskToModel(row) {
     pomodoroCount: pomodoros,
     isRunning: !!row.is_running,
     timerStartedAt: row.timer_started_at ? Number(row.timer_started_at) : null,
-    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks.map(st => ({
+      ...st,
+      recurrence: st.recurrence || getSubtaskRecurrence(st)
+    })) : [],
     updatedAt: row.updated_at || null
   };
 }
@@ -2729,6 +2836,17 @@ async function fetchFromSupabase() {
             mapped.pomodoroCount = 0;
             mapped.isRunning = false;
             mapped.timerStartedAt = null;
+            if (mapped.subtasks && Array.isArray(mapped.subtasks)) {
+              mapped.subtasks = mapped.subtasks.map(st => {
+                const rec = st.recurrence || getSubtaskRecurrence(st);
+                const isDaily = rec === 'diaria';
+                return {
+                  ...st,
+                  recurrence: rec,
+                  completed: isDaily ? false : !!st.completed
+                };
+              });
+            }
             needsDbSyncBack = true;
           }
 
@@ -2854,6 +2972,17 @@ function handleRealtimeChange(payload) {
         updated.elapsedSeconds = 0;
         updated.blockElapsedSeconds = 0;
         updated.pomodoroCount = 0;
+        if (updated.subtasks && Array.isArray(updated.subtasks)) {
+          updated.subtasks = updated.subtasks.map(st => {
+            const rec = st.recurrence || getSubtaskRecurrence(st);
+            const isDaily = rec === 'diaria';
+            return {
+              ...st,
+              recurrence: rec,
+              completed: isDaily ? false : !!st.completed
+            };
+          });
+        }
       }
 
       if (existing && existing.targetSeconds && !newRow.target_seconds) {
@@ -2970,6 +3099,7 @@ async function dbUpsertDailyHistory(entry) {
 window.toggleTaskCompletion = toggleTaskCompletion;
 window.deleteTask = deleteTask;
 window.toggleSubtask = toggleSubtask;
+window.toggleSubtaskRecurrence = toggleSubtaskRecurrence;
 window.addSubtaskToTask = addSubtaskToTask;
 window.addInlineSubtask = addInlineSubtask;
 window.removeSubtaskFromTask = removeSubtaskFromTask;

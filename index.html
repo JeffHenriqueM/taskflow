@@ -203,6 +203,11 @@
               <label>Subtarefas Iniciais (Opcional)</label>
               <div class="subtask-input-wrapper">
                 <input type="text" id="initialSubtaskInput" class="flex-1" placeholder="Digite uma subtarefa...">
+                <select id="initialSubtaskRecurrence" class="input-recurrence-subtask" title="Recorrência da subtarefa">
+                  <option value="diaria" selected>🔄 Diária</option>
+                  <option value="nenhuma">📌 Não se repete</option>
+                  <option value="semanal">🔄 Semanal</option>
+                </select>
                 <input type="date" id="initialSubtaskDueDate" class="input-date-subtask" title="Data de entrega / prazo da subtarefa (opcional)">
                 <button type="button" id="btnAddInitialSubtask" class="btn btn-secondary">Adicionar</button>
               </div>
@@ -426,6 +431,11 @@
           <label>Gerenciar Subtarefas desta Tarefa</label>
           <div class="subtask-input-wrapper">
             <input type="text" id="editNewSubtaskInput" class="flex-1" placeholder="Nova subtarefa...">
+            <select id="editNewSubtaskRecurrence" class="input-recurrence-subtask" title="Recorrência da subtarefa">
+              <option value="diaria" selected>🔄 Diária</option>
+              <option value="nenhuma">📌 Não se repete</option>
+              <option value="semanal">🔄 Semanal</option>
+            </select>
             <input type="date" id="editNewSubtaskDueDate" class="input-date-subtask" title="Prazo da subtarefa (opcional)">
             <button type="button" id="btnEditAddSubtask" class="btn btn-secondary">Adicionar</button>
           </div>
@@ -460,6 +470,15 @@
         <div class="form-group">
           <label for="modalEditSubtaskTitle">Título da Subtarefa *</label>
           <input type="text" id="modalEditSubtaskTitle" required placeholder="Título da subtarefa">
+        </div>
+
+        <div class="form-group">
+          <label for="modalEditSubtaskRecurrence">Recorrência da Subtarefa</label>
+          <select id="modalEditSubtaskRecurrence">
+            <option value="diaria">🔄 Diária (Repete todos os dias - renova a cada dia)</option>
+            <option value="nenhuma">📌 Não se repete (Única - mantém status concluído)</option>
+            <option value="semanal">🔄 Semanal (Toda semana)</option>
+          </select>
         </div>
 
         <div class="form-group">
