@@ -16,7 +16,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_artsivo',
     title: 'Artsivo',
-    category: 'Geral',
+    category: 'ArtsIvo',
     priority: 'alta',
     description: 'Demandas e acompanhamento estratégico da Artsivo.',
     completed: false,
@@ -29,7 +29,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_transicao',
     title: 'Transição',
-    category: 'Gestão',
+    category: 'Empreendedorismo',
     priority: 'alta',
     description: 'Processo de transição e alinhamento de fluxos operacionais.',
     completed: false,
@@ -42,7 +42,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_gravacao_tiktok',
     title: 'Gravação tiktok',
-    category: 'TikTok',
+    category: 'Empreendedorismo',
     priority: 'media',
     description: 'Roteirização, gravação e produção de vídeos para o TikTok.',
     completed: false,
@@ -55,7 +55,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_ingles',
     title: 'Inglês',
-    category: 'Desenvolvimento',
+    category: 'Pessoal',
     priority: 'media',
     description: 'Estudo diário, conversação e expansão de vocabulário.',
     completed: false,
@@ -68,7 +68,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_estudar_tiktok',
     title: 'Estudar TikTok',
-    category: 'TikTok',
+    category: 'Empreendedorismo',
     priority: 'media',
     description: 'Análise de tendências, métricas do TikTok Shop e novos formatos.',
     completed: false,
@@ -81,7 +81,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_fias_loja',
     title: 'Fias loja',
-    category: 'FIAS',
+    category: 'Empreendedorismo',
     priority: 'baixa',
     description: 'Gestão de catálogo, pedidos e estrutura da loja FIAS.',
     completed: false,
@@ -94,7 +94,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_fias_site',
     title: 'Fias site',
-    category: 'FIAS',
+    category: 'Empreendedorismo',
     priority: 'baixa',
     description: 'Atualizações técnicas, páginas de conversão e melhorias no site.',
     completed: false,
@@ -107,7 +107,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_fias_marketing',
     title: 'Fias Marketing',
-    category: 'FIAS',
+    category: 'Empreendedorismo',
     priority: 'media',
     description: 'Campanhas de tráfego, anúncios, criativos e estratégias comerciais.',
     completed: false,
@@ -133,7 +133,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_alimentacao',
     title: 'Alimentação',
-    category: 'Saúde',
+    category: 'Pessoal',
     priority: 'alta',
     description: 'Horários de refeições, planejamento alimentar e rotina saudável.',
     completed: false,
@@ -159,7 +159,7 @@ const INITIAL_DEFAULT_TASKS = [
   {
     id: 'task_investimentos',
     title: 'Investimentos',
-    category: 'Finanças',
+    category: 'Pessoal',
     priority: 'baixa',
     description: 'Acompanhamento de aportes, carteira e planejamento financeiro.',
     completed: false,
@@ -203,6 +203,7 @@ const historyOverallBadge = document.getElementById('historyOverallBadge');
 const taskForm = document.getElementById('taskForm');
 const taskTitleInput = document.getElementById('taskTitle');
 const taskCategoryInput = document.getElementById('taskCategory');
+const taskCategoryCustomInput = document.getElementById('taskCategoryCustom');
 const taskPrioritySelect = document.getElementById('taskPriority');
 const taskRecurrenceSelect = document.getElementById('taskRecurrence');
 const taskDueDateInput = document.getElementById('taskDueDate');
@@ -263,6 +264,7 @@ const editTaskForm = document.getElementById('editTaskForm');
 const editTaskIdInput = document.getElementById('editTaskId');
 const editTaskTitleInput = document.getElementById('editTaskTitle');
 const editTaskCategoryInput = document.getElementById('editTaskCategory');
+const editTaskCategoryCustomInput = document.getElementById('editTaskCategoryCustom');
 const editTaskPrioritySelect = document.getElementById('editTaskPriority');
 const editTaskRecurrenceSelect = document.getElementById('editTaskRecurrence');
 const editTaskDueDateInput = document.getElementById('editTaskDueDate');
@@ -377,6 +379,16 @@ function loadData() {
     t.targetSeconds = t.targetSeconds || 1500;
     t.recurrence = t.recurrence || 'diaria';
     t.dueDate = t.dueDate || null;
+    if (t.category) {
+      const catLower = t.category.toLowerCase().trim();
+      if (catLower === 'villamor') t.category = 'Villamor';
+      else if (catLower === 'artsivo') t.category = 'ArtsIvo';
+      else if (catLower === 'pessoal') t.category = 'Pessoal';
+      else if (catLower === 'empreendedorismo') t.category = 'Empreendedorismo';
+      else if (t.id === 'task_artsivo' && (t.category === 'Geral' || !t.category)) t.category = 'ArtsIvo';
+    } else {
+      t.category = 'Geral';
+    }
     if (t.pomodoroCount === undefined) {
       t.pomodoroCount = Math.floor((t.elapsedSeconds || 0) / t.targetSeconds);
     }
@@ -554,6 +566,31 @@ function setupEventListeners() {
       currentSort = e.target.value;
       localStorage.setItem('taskflow_sort', currentSort);
       renderTasks();
+    });
+  }
+
+  // Controle de Categoria Personalizada
+  if (taskCategoryInput && taskCategoryCustomInput) {
+    taskCategoryInput.addEventListener('change', () => {
+      if (taskCategoryInput.value === '__custom__') {
+        taskCategoryCustomInput.classList.remove('hidden');
+        taskCategoryCustomInput.focus();
+      } else {
+        taskCategoryCustomInput.classList.add('hidden');
+        taskCategoryCustomInput.value = '';
+      }
+    });
+  }
+
+  if (editTaskCategoryInput && editTaskCategoryCustomInput) {
+    editTaskCategoryInput.addEventListener('change', () => {
+      if (editTaskCategoryInput.value === '__custom__') {
+        editTaskCategoryCustomInput.classList.remove('hidden');
+        editTaskCategoryCustomInput.focus();
+      } else {
+        editTaskCategoryCustomInput.classList.add('hidden');
+        editTaskCategoryCustomInput.value = '';
+      }
     });
   }
 
@@ -760,6 +797,53 @@ function renderInitialSubtasksChips() {
   `).join('');
 }
 
+function getSelectedCategory(selectEl, customInputEl) {
+  if (!selectEl) return 'Geral';
+  if (selectEl.value === '__custom__') {
+    return (customInputEl && customInputEl.value.trim()) ? customInputEl.value.trim() : 'Geral';
+  }
+  return selectEl.value.trim() || 'Geral';
+}
+
+function formatCategoryBadge(category) {
+  if (!category) return '';
+  const cat = category.trim();
+  const lower = cat.toLowerCase();
+
+  let className = 'badge-category-default';
+  let icon = '📁';
+
+  if (lower === 'villamor') {
+    className = 'badge-category-villamor';
+    icon = '🏢';
+  } else if (lower === 'artsivo') {
+    className = 'badge-category-artsivo';
+    icon = '🎨';
+  } else if (lower === 'pessoal') {
+    className = 'badge-category-pessoal';
+    icon = '👤';
+  } else if (lower === 'empreendedorismo') {
+    className = 'badge-category-empreendedorismo';
+    icon = '🚀';
+  }
+
+  return `<span class="badge badge-category ${className}" onclick="filterByCategory('${escapeHtml(cat)}')" title="Filtrar tarefas por ${escapeHtml(cat)}">${icon} ${escapeHtml(cat)}</span>`;
+}
+
+function filterByCategory(cat) {
+  if (searchInput) {
+    if (searchInput.value === cat) {
+      searchInput.value = '';
+      searchQuery = '';
+    } else {
+      searchInput.value = cat;
+      searchQuery = cat.toLowerCase();
+    }
+    renderTasks();
+  }
+}
+window.filterByCategory = filterByCategory;
+
 function handleCreateTask(e) {
   e.preventDefault();
   const title = taskTitleInput.value.trim();
@@ -768,11 +852,12 @@ function handleCreateTask(e) {
   const targetMins = parseInt(taskTimerMinutesInput ? taskTimerMinutesInput.value : '25', 10) || 25;
   const recurrence = taskRecurrenceSelect ? taskRecurrenceSelect.value : 'diaria';
   const dueDate = taskDueDateInput ? taskDueDateInput.value : '';
+  const category = getSelectedCategory(taskCategoryInput, taskCategoryCustomInput);
 
   const newTask = {
     id: generateId(),
     title: title,
-    category: taskCategoryInput.value.trim() || 'Geral',
+    category: category,
     priority: taskPrioritySelect.value || 'media',
     recurrence: recurrence || 'diaria',
     dueDate: dueDate || null,
@@ -795,6 +880,11 @@ function handleCreateTask(e) {
   taskForm.reset();
   if (taskTimerMinutesInput) taskTimerMinutesInput.value = '25';
   if (taskRecurrenceSelect) taskRecurrenceSelect.value = 'diaria';
+  if (taskCategoryInput) taskCategoryInput.value = 'Villamor';
+  if (taskCategoryCustomInput) {
+    taskCategoryCustomInput.value = '';
+    taskCategoryCustomInput.classList.add('hidden');
+  }
   if (taskDueDateInput) taskDueDateInput.value = '';
   if (initialSubtaskDueDateInput) initialSubtaskDueDateInput.value = '';
   initialSubtasks = [];
@@ -1121,7 +1211,7 @@ function showRandomTaskModal(task, executionSeconds, totalCandidates) {
 
     <div class="random-picked-badges">
       <span class="random-time-badge">⏱️ Bloco de ${taskMinutes} min</span>
-      ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
+      ${formatCategoryBadge(task.category)}
       <span class="badge badge-priority-${task.priority || 'media'}">${formatPriorityLabel(task.priority || 'media')}</span>
       ${subtasks.length > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 11px;">📋 ${completedSubs}/${subtasks.length} subtarefas</span>` : ''}
     </div>
@@ -1501,7 +1591,24 @@ function openEditTaskModal(taskId) {
 
   if (editTaskIdInput) editTaskIdInput.value = task.id;
   if (editTaskTitleInput) editTaskTitleInput.value = task.title || '';
-  if (editTaskCategoryInput) editTaskCategoryInput.value = task.category || '';
+  if (editTaskCategoryInput) {
+    const knownValues = ['Villamor', 'ArtsIvo', 'Pessoal', 'Empreendedorismo', 'Geral'];
+    const currentCat = (task.category || 'Geral').trim();
+    const match = knownValues.find(v => v.toLowerCase() === currentCat.toLowerCase());
+    if (match) {
+      editTaskCategoryInput.value = match;
+      if (editTaskCategoryCustomInput) {
+        editTaskCategoryCustomInput.classList.add('hidden');
+        editTaskCategoryCustomInput.value = '';
+      }
+    } else {
+      editTaskCategoryInput.value = '__custom__';
+      if (editTaskCategoryCustomInput) {
+        editTaskCategoryCustomInput.classList.remove('hidden');
+        editTaskCategoryCustomInput.value = currentCat;
+      }
+    }
+  }
   if (editTaskPrioritySelect) editTaskPrioritySelect.value = task.priority || 'media';
   if (editTaskRecurrenceSelect) editTaskRecurrenceSelect.value = task.recurrence || 'diaria';
   if (editTaskDueDateInput) editTaskDueDateInput.value = task.dueDate || '';
@@ -1584,7 +1691,7 @@ function handleSaveEditTask(e) {
   const newTargetSecs = newTargetMins * 60;
 
   task.title = newTitle;
-  task.category = editTaskCategoryInput.value.trim() || 'Geral';
+  task.category = getSelectedCategory(editTaskCategoryInput, editTaskCategoryCustomInput);
   task.priority = editTaskPrioritySelect.value || 'media';
   task.recurrence = editTaskRecurrenceSelect.value || 'diaria';
   task.dueDate = editTaskDueDateInput.value || null;
@@ -1783,6 +1890,13 @@ function renderTasks() {
         const weightB = priorityWeight[b.priority] || 2;
         return weightB - weightA;
       }
+      case 'category': {
+        // Agrupar por categoria
+        const catA = (a.category || 'Geral').toLowerCase();
+        const catB = (b.category || 'Geral').toLowerCase();
+        if (catA !== catB) return catA.localeCompare(catB);
+        return 0;
+      }
       case 'due-date': {
         // Prazo mais próximo primeiro (sem prazo vai para o final)
         if (!a.dueDate && !b.dueDate) return 0;
@@ -1860,7 +1974,7 @@ function renderTasks() {
               <span class="task-title">${escapeHtml(task.title)}</span>
               ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ''}
               <div class="task-meta-tags">
-                ${task.category ? `<span class="badge badge-category">📁 ${escapeHtml(task.category)}</span>` : ''}
+                ${formatCategoryBadge(task.category)}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
                 ${formatDueDateBadge(task.dueDate, task.completed)}
@@ -2175,7 +2289,7 @@ function renderHistoryTaskItem(task, isDone) {
       <div class="history-task-mini-header">
         <div>
           <span class="history-task-mini-title">${escapeHtml(task.title)}</span>
-          ${task.category ? `<span class="badge badge-category" style="margin-left: 6px; font-size: 10px; padding: 2px 6px;">📁 ${escapeHtml(task.category)}</span>` : ''}
+          ${formatCategoryBadge(task.category)}
         </div>
         <span class="history-task-mini-time">⏱️ ${timeStr}</span>
       </div>
