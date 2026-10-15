@@ -4,6 +4,7 @@
 const STORAGE_KEY = 'taskflow_data_v2';
 const HISTORY_STORAGE_KEY = 'taskflow_history_v1';
 const ACTIVE_DATE_KEY = 'taskflow_active_date_v1';
+const LAST_RESET_DATE_KEY = 'taskflow_last_reset_date_v1';
 
 // Configurações do Supabase
 const SUPABASE_URL = 'https://disepmpblhwimmrhzpls.supabase.co';
@@ -309,15 +310,31 @@ function getTodayDateKey() {
   return `${year}-${month}-${day}`;
 }
 
+function getYesterdayDateKey() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDateKeyFromTimestamp(dateStrOrTs) {
+  if (!dateStrOrTs) return null;
+  const d = new Date(dateStrOrTs);
+  if (isNaN(d.getTime())) return null;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateDisplay(dateStr) {
   try {
     const [y, m, d] = dateStr.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
     const todayKey = getTodayDateKey();
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    const yKey = getYesterdayDateKey();
 
     const formatted = dateObj.toLocaleDateString('pt-BR', {
       weekday: 'long',
@@ -404,20 +421,38 @@ function loadData() {
   });
 
   // 3. Verifica virada automática do dia (Rollover à meia-noite)
+  checkDayRollover();
+}
+
+function checkDayRollover() {
   const todayKey = getTodayDateKey();
+  const lastResetDate = localStorage.getItem(LAST_RESET_DATE_KEY);
   const storedActiveDate = localStorage.getItem(ACTIVE_DATE_KEY);
 
-  if (storedActiveDate && storedActiveDate !== todayKey) {
-    // Arquiva o dia anterior automaticamente
-    archiveDay(storedActiveDate, false);
-    // Reinicia as tarefas para o novo dia
+  const isDifferentActiveDate = storedActiveDate && storedActiveDate !== todayKey;
+  const notResetToday = lastResetDate !== todayKey;
+
+  if (isDifferentActiveDate || notResetToday) {
+    const prevDate = isDifferentActiveDate ? storedActiveDate : (lastResetDate || getYesterdayDateKey());
+
+    // Se o dia anterior ainda não foi arquivado e possui tarefas com progresso, arquiva
+    const hasProgress = tasks && tasks.some(t => t.completed || (t.pomodoroCount || 0) > 0 || (t.elapsedSeconds || 0) > 0);
+    if (prevDate && !dailyHistory[prevDate] && hasProgress) {
+      archiveDay(prevDate, false);
+    }
+
     resetTasksForNewDay();
     activeDate = todayKey;
-    localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
+    localStorage.setItem(LAST_RESET_DATE_KEY, todayKey);
+    localStorage.setItem(ACTIVE_DATE_KEY, todayKey);
+    updateDateDisplay();
+    render();
+    renderHistory();
+    return true;
   } else {
     activeDate = storedActiveDate || todayKey;
-    localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
   }
+  return false;
 }
 
 function saveTasks() {
@@ -443,7 +478,15 @@ function saveData() {
 }
 
 function archiveDay(dateKey, isManual = false) {
-  if (!tasks || tasks.length === 0) return;
+  if (!tasks || tasks.length === 0 || !dateKey) return;
+
+  const completedCount = tasks.filter(t => t.completed).length;
+
+  // Se já existe um histórico para esta data e não é encerramento manual,
+  // evita sobrescrever histórico preenchido com tarefas já zeradas
+  if (dailyHistory[dateKey] && !isManual && (dailyHistory[dateKey].completedCount || 0) > completedCount) {
+    return;
+  }
 
   // Pausa cronômetros ativos
   tasks.forEach(t => {
@@ -453,7 +496,6 @@ function archiveDay(dateKey, isManual = false) {
   });
 
   const totalTasks = tasks.length;
-  const completedCount = tasks.filter(t => t.completed).length;
   const pendingCount = totalTasks - completedCount;
   const percent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
 
@@ -504,7 +546,9 @@ function resetTasksForNewDay() {
     };
   });
   saveTasks();
-  dbSyncAllTasks();
+  if (supabaseClient) {
+    dbSyncAllTasks();
+  }
 }
 
 function handleCloseDay() {
@@ -519,6 +563,10 @@ function handleCloseDay() {
   if (confirm(msg)) {
     archiveDay(activeDate, true);
     resetTasksForNewDay();
+    const todayKey = getTodayDateKey();
+    activeDate = todayKey;
+    localStorage.setItem(LAST_RESET_DATE_KEY, todayKey);
+    localStorage.setItem(ACTIVE_DATE_KEY, todayKey);
     render();
     renderHistory();
     alert('Dia encerrado com sucesso! O relatório completo foi salvo no Histórico.');
@@ -1449,6 +1497,10 @@ function formatPriorityLabel(p) {
 // Ticker Global (Atualiza contagem regressiva a cada 1 segundo)
 function startGlobalTicker() {
   setInterval(() => {
+    // 1. Verifica virada de dia em tempo real (mesmo com a aba aberta à meia-noite)
+    checkDayRollover();
+
+    // 2. Banner e contagem regressiva da tarefa em andamento
     const runningTask = tasks.find(t => t.isRunning);
     if (!runningTask) {
       activeTimerBanner.classList.add('hidden');
@@ -2419,7 +2471,8 @@ function mapDbTaskToModel(row) {
     pomodoroCount: pomodoros,
     isRunning: !!row.is_running,
     timerStartedAt: row.timer_started_at ? Number(row.timer_started_at) : null,
-    subtasks: Array.isArray(row.subtasks) ? row.subtasks : []
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+    updatedAt: row.updated_at || null
   };
 }
 
@@ -2438,7 +2491,8 @@ function mapModelToDbTask(task) {
     elapsed_seconds: task.elapsedSeconds || 0,
     is_running: !!task.isRunning,
     timer_started_at: task.timerStartedAt || null,
-    subtasks: task.subtasks || []
+    subtasks: task.subtasks || [],
+    updated_at: new Date().toISOString()
   };
 }
 
@@ -2446,6 +2500,9 @@ async function fetchFromSupabase() {
   if (!supabaseClient) return;
   updateSyncStatus('syncing', 'Sincronizando...');
   try {
+    const todayKey = getTodayDateKey();
+    const lastResetDate = localStorage.getItem(LAST_RESET_DATE_KEY);
+
     const { data, error } = await supabaseClient
       .from('tasks')
       .select('*')
@@ -2468,18 +2525,46 @@ async function fetchFromSupabase() {
       } else if (data.length > 0) {
         // Atualiza tarefas locais com os dados do Supabase
         const localTasksMap = new Map(tasks.map(t => [t.id, t]));
+        let needsDbSyncBack = false;
+
         tasks = data.map(row => {
           const mapped = mapDbTaskToModel(row);
           const existing = localTasksMap.get(mapped.id);
+
+          // Verifica se a linha do Supabase foi atualizada hoje
+          const rowDate = getDateKeyFromTimestamp(row.updated_at);
+          const isRowFromToday = (rowDate === todayKey);
+
+          // Se a linha do Supabase não foi atualizada hoje (é de ontem ou data anterior)
+          if (!isRowFromToday) {
+            const isSingleTask = mapped.recurrence === 'nenhuma';
+            if (!isSingleTask) {
+              mapped.completed = false;
+            }
+            mapped.elapsedSeconds = 0;
+            mapped.blockElapsedSeconds = 0;
+            mapped.pomodoroCount = 0;
+            mapped.isRunning = false;
+            mapped.timerStartedAt = null;
+            needsDbSyncBack = true;
+          }
+
+          // Se já temos estado local válido de hoje e Supabase não é de hoje:
+          if (existing && lastResetDate === todayKey && !isRowFromToday) {
+            mapped.completed = existing.completed;
+            mapped.elapsedSeconds = existing.elapsedSeconds;
+            mapped.blockElapsedSeconds = existing.blockElapsedSeconds;
+            mapped.pomodoroCount = existing.pomodoroCount;
+            mapped.isRunning = existing.isRunning;
+            mapped.timerStartedAt = existing.timerStartedAt;
+          }
+
           if (existing) {
             if (existing.targetSeconds && !row.target_seconds) {
               mapped.targetSeconds = existing.targetSeconds;
             }
-            if (existing.blockElapsedSeconds !== undefined) {
+            if (existing.blockElapsedSeconds !== undefined && isRowFromToday) {
               mapped.blockElapsedSeconds = existing.blockElapsedSeconds;
-            }
-            if (existing.pomodoroCount !== undefined && mapped.pomodoroCount === 0) {
-              mapped.pomodoroCount = existing.pomodoroCount;
             }
             if (!mapped.recurrence && existing.recurrence) {
               mapped.recurrence = existing.recurrence;
@@ -2492,6 +2577,10 @@ async function fetchFromSupabase() {
         });
         saveTasks();
         render();
+
+        if (needsDbSyncBack) {
+          dbSyncAllTasks();
+        }
       }
       updateSyncStatus('connected', 'Sincronizado');
     } else if (error) {
@@ -2511,6 +2600,10 @@ async function fetchFromSupabase() {
 
     if (!histError && histData && histData.length > 0) {
       histData.forEach(row => {
+        // Se já temos esse dia no dailyHistory local e o local tem mais tarefas, preserva
+        if (dailyHistory[row.date] && (dailyHistory[row.date].tasks || []).length > (row.tasks || []).length) {
+          return;
+        }
         dailyHistory[row.date] = {
           date: row.date,
           dateDisplay: row.date_display || row.date,
@@ -2553,6 +2646,7 @@ function subscribeToRealtime() {
 function handleRealtimeChange(payload) {
   if (isSyncing) return; // Evita loop de atualização originado por este mesmo cliente
   const { eventType, new: newRow, old: oldRow } = payload;
+  const todayKey = getTodayDateKey();
 
   if (eventType === 'INSERT') {
     const idx = tasks.findIndex(t => t.id === newRow.id);
@@ -2566,14 +2660,24 @@ function handleRealtimeChange(payload) {
     if (idx !== -1) {
       const existing = tasks[idx];
       const updated = mapDbTaskToModel(newRow);
+
+      const rowDate = getDateKeyFromTimestamp(newRow.updated_at);
+      const isRowFromToday = (rowDate === todayKey);
+
+      if (!isRowFromToday) {
+        if (updated.recurrence !== 'nenhuma') {
+          updated.completed = false;
+        }
+        updated.elapsedSeconds = 0;
+        updated.blockElapsedSeconds = 0;
+        updated.pomodoroCount = 0;
+      }
+
       if (existing && existing.targetSeconds && !newRow.target_seconds) {
         updated.targetSeconds = existing.targetSeconds;
       }
-      if (existing && existing.blockElapsedSeconds !== undefined) {
+      if (existing && existing.blockElapsedSeconds !== undefined && isRowFromToday) {
         updated.blockElapsedSeconds = existing.blockElapsedSeconds;
-      }
-      if (existing && existing.pomodoroCount !== undefined) {
-        updated.pomodoroCount = Math.max(existing.pomodoroCount, updated.pomodoroCount);
       }
       if (!updated.recurrence && existing && existing.recurrence) {
         updated.recurrence = existing.recurrence;
