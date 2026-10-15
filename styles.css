@@ -939,6 +939,14 @@ textarea {
   .sort-select {
     flex: 1;
   }
+  .random-picker-group {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .random-toolbar-select {
+    width: 100%;
+  }
   .btn-random {
     width: 100%;
     justify-content: center;
@@ -1598,6 +1606,43 @@ textarea {
 /* ==========================================
    Botão e Modal: Escolher Aleatoriamente
    ========================================== */
+.random-picker-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.random-toolbar-select {
+  background: var(--bg-card);
+  color: #c4b5fd;
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.random-toolbar-select:hover {
+  background: var(--bg-tertiary);
+  border-color: #a78bfa;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.25);
+}
+
+.random-toolbar-select:focus {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.35);
+}
+
+.random-toolbar-select option {
+  background: var(--bg-card);
+  color: #fff;
+}
+
 .btn-random {
   background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
   color: #ffffff;
@@ -1631,6 +1676,53 @@ textarea {
 
 .random-modal-card {
   max-width: 480px;
+}
+
+.random-modal-category-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+}
+
+.random-modal-category-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c4b5fd;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.random-modal-category-select {
+  background: var(--bg-secondary);
+  color: #ffffff;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.random-modal-category-select:hover,
+.random-modal-category-select:focus {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.35);
+}
+
+.random-modal-category-select option {
+  background: var(--bg-card);
+  color: #ffffff;
 }
 
 .random-modal-icon {

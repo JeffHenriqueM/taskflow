@@ -252,12 +252,15 @@ const btnSaveCustomMinutes = document.getElementById('btnSaveCustomMinutes');
 
 // Modal e Botão de Escolha Aleatória
 const btnPickRandomTask = document.getElementById('btnPickRandomTask');
+const randomCategorySelect = document.getElementById('randomCategorySelect');
+const modalRandomCategorySelect = document.getElementById('modalRandomCategorySelect');
 const randomTaskModal = document.getElementById('randomTaskModal');
 const randomModalSubtitle = document.getElementById('randomModalSubtitle');
 const randomPickedCard = document.getElementById('randomPickedCard');
 const btnStartRandomTask = document.getElementById('btnStartRandomTask');
 const btnRerollRandomTask = document.getElementById('btnRerollRandomTask');
 const btnCloseRandomModal = document.getElementById('btnCloseRandomModal');
+let selectedRandomCategory = 'all';
 
 // Modal de Edição de Tarefa Completa
 const editTaskModal = document.getElementById('editTaskModal');
@@ -295,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupTabSwitching();
   updateDateDisplay();
+  updateRandomCategoryOptions();
   render();
   renderHistory();
   startGlobalTicker();
@@ -720,6 +724,25 @@ function setupEventListeners() {
   }
 
   // Ações do Sorteio Aleatório de Tarefas
+  if (randomCategorySelect) {
+    randomCategorySelect.addEventListener('change', (e) => {
+      selectedRandomCategory = e.target.value;
+      if (modalRandomCategorySelect) {
+        modalRandomCategorySelect.value = selectedRandomCategory;
+      }
+    });
+  }
+
+  if (modalRandomCategorySelect) {
+    modalRandomCategorySelect.addEventListener('change', (e) => {
+      selectedRandomCategory = e.target.value;
+      if (randomCategorySelect) {
+        randomCategorySelect.value = selectedRandomCategory;
+      }
+      pickRandomTask(true);
+    });
+  }
+
   if (btnPickRandomTask) {
     btnPickRandomTask.addEventListener('click', () => {
       pickRandomTask(false);
@@ -1144,8 +1167,51 @@ function resetTimer(taskId) {
 }
 
 // ==========================================
-// Sorteio Aleatório de Tarefas (Menor Tempo de Execução)
 // ==========================================
+// Sorteio Aleatório de Tarefas com Filtro de Categoria
+// ==========================================
+
+function getAvailableCategories() {
+  const baseCategories = ['Villamor', 'ArtsIvo', 'Pessoal', 'Empreendedorismo', 'Geral'];
+  const cats = new Set(baseCategories);
+  (tasks || []).forEach(t => {
+    if (t.category && typeof t.category === 'string') {
+      const trimmed = t.category.trim();
+      if (trimmed) cats.add(trimmed);
+    }
+  });
+  return Array.from(cats);
+}
+
+function updateRandomCategoryOptions() {
+  const categories = getAvailableCategories();
+  const getCatIcon = (cat) => {
+    const l = cat.toLowerCase();
+    if (l === 'villamor') return '🏢';
+    if (l === 'artsivo') return '🎨';
+    if (l === 'pessoal') return '👤';
+    if (l === 'empreendedorismo') return '🚀';
+    if (l === 'geral') return '📁';
+    return '🏷️';
+  };
+
+  const optionsHtml = `
+    <option value="all">🎲 Todas as Categorias</option>
+    ${categories.map(c => `<option value="${escapeHtml(c)}">${getCatIcon(c)} ${escapeHtml(c)}</option>`).join('')}
+  `;
+
+  if (randomCategorySelect) {
+    const prev = randomCategorySelect.value || selectedRandomCategory || 'all';
+    randomCategorySelect.innerHTML = optionsHtml;
+    randomCategorySelect.value = (prev === 'all' || categories.includes(prev)) ? prev : 'all';
+  }
+
+  if (modalRandomCategorySelect) {
+    const prev = modalRandomCategorySelect.value || selectedRandomCategory || 'all';
+    modalRandomCategorySelect.innerHTML = optionsHtml;
+    modalRandomCategorySelect.value = (prev === 'all' || categories.includes(prev)) ? prev : 'all';
+  }
+}
 
 function isTaskUntouchedToday(task) {
   const pomodoros = task.pomodoroCount || 0;
@@ -1170,9 +1236,9 @@ function pickRandomTask(isReroll = false) {
   }
 
   // Filtra apenas as tarefas pendentes que ainda não tiveram nada feito hoje (sem blocos nem tempo trabalhado)
-  const eligibleTasks = pendingTasks.filter(isTaskUntouchedToday);
+  const allEligibleTasks = pendingTasks.filter(isTaskUntouchedToday);
 
-  if (eligibleTasks.length === 0) {
+  if (allEligibleTasks.length === 0) {
     alert('✨ Todas as tarefas pendentes de hoje já tiveram blocos ou tempo de foco iniciados!\n\nNenhuma tarefa zerada restante para sortear hoje.');
     return;
   }
@@ -1184,18 +1250,45 @@ function pickRandomTask(isReroll = false) {
     renderTasks();
   }
 
-  // Caso exista apenas 1 tarefa elegível no dia
-  if (eligibleTasks.length === 1) {
-    const singleTask = eligibleTasks[0];
-    currentRandomChosenTaskId = singleTask.id;
-    showRandomTaskModal(singleTask, getTaskExecutionTime(singleTask), 1);
+  const activeCat = selectedRandomCategory || 'all';
+  let eligibleTasks = allEligibleTasks;
+
+  if (activeCat !== 'all') {
+    eligibleTasks = allEligibleTasks.filter(t => {
+      const tCat = (t.category || 'Geral').toLowerCase().trim();
+      return tCat === activeCat.toLowerCase().trim();
+    });
+  }
+
+  // Sincroniza selects de categoria
+  if (randomCategorySelect && randomCategorySelect.value !== activeCat) {
+    randomCategorySelect.value = activeCat;
+  }
+  if (modalRandomCategorySelect && modalRandomCategorySelect.value !== activeCat) {
+    modalRandomCategorySelect.value = activeCat;
+  }
+
+  // Se não há tarefas elegíveis na categoria selecionada
+  if (eligibleTasks.length === 0) {
+    showEmptyRandomCategoryModal(activeCat, allEligibleTasks.length);
     if (isReroll) {
       triggerRerollAnimation(true);
     }
     return;
   }
 
-  // Sorteia entre todas as tarefas elegíveis hoje, garantindo escolher uma DIFERENTE da atual
+  // Caso exista apenas 1 tarefa elegível nesta categoria
+  if (eligibleTasks.length === 1) {
+    const singleTask = eligibleTasks[0];
+    currentRandomChosenTaskId = singleTask.id;
+    showRandomTaskModal(singleTask, getTaskExecutionTime(singleTask), 1, activeCat);
+    if (isReroll) {
+      triggerRerollAnimation(true);
+    }
+    return;
+  }
+
+  // Sorteia entre todas as tarefas elegíveis da categoria hoje, garantindo escolher uma DIFERENTE da atual
   let pool = eligibleTasks;
   if (currentRandomChosenTaskId) {
     const others = eligibleTasks.filter(t => t.id !== currentRandomChosenTaskId);
@@ -1208,12 +1301,49 @@ function pickRandomTask(isReroll = false) {
   const chosenTask = pool[randomIndex];
 
   currentRandomChosenTaskId = chosenTask.id;
-  showRandomTaskModal(chosenTask, getTaskExecutionTime(chosenTask), eligibleTasks.length);
+  showRandomTaskModal(chosenTask, getTaskExecutionTime(chosenTask), eligibleTasks.length, activeCat);
 
   if (isReroll) {
     triggerRerollAnimation(false);
   }
 }
+
+function showEmptyRandomCategoryModal(category, totalAllUntouched) {
+  if (!randomTaskModal || !randomPickedCard) return;
+
+  currentRandomChosenTaskId = null;
+  if (randomModalSubtitle) {
+    randomModalSubtitle.textContent = `Categoria "${category}" sem tarefas disponíveis hoje`;
+  }
+
+  randomPickedCard.innerHTML = `
+    <div style="text-align: center; padding: 20px 12px;">
+      <div style="font-size: 34px; margin-bottom: 8px;">ℹ️</div>
+      <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px;">
+        Nenhuma tarefa pendente sem blocos em "${escapeHtml(category)}" hoje
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
+        Todas as tarefas desta categoria já foram concluídas ou já tiveram foco realizado hoje.
+      </p>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="resetRandomCategoryToAll()" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+        🎲 Sortear em Todas as Categorias (${totalAllUntouched} disponíveis)
+      </button>
+    </div>
+  `;
+
+  if (btnStartRandomTask) btnStartRandomTask.disabled = true;
+  if (btnRerollRandomTask) btnRerollRandomTask.disabled = true;
+
+  randomTaskModal.classList.remove('hidden');
+}
+
+function resetRandomCategoryToAll() {
+  selectedRandomCategory = 'all';
+  if (randomCategorySelect) randomCategorySelect.value = 'all';
+  if (modalRandomCategorySelect) modalRandomCategorySelect.value = 'all';
+  pickRandomTask(true);
+}
+window.resetRandomCategoryToAll = resetRandomCategoryToAll;
 
 function triggerRerollAnimation(isOnlyOne = false) {
   const icon = document.querySelector('.random-modal-icon');
@@ -1231,7 +1361,7 @@ function triggerRerollAnimation(isOnlyOne = false) {
 
       const infoNote = randomPickedCard.querySelector('.random-info-note');
       if (infoNote) {
-        infoNote.innerHTML = `<span style="color: #f59e0b; font-weight: 600;">⚠️ Esta é a única tarefa pendente sem blocos hoje. Não há outra para sortear!</span>`;
+        infoNote.innerHTML = `<span style="color: #f59e0b; font-weight: 600;">⚠️ Esta é a única tarefa pendente sem blocos hoje nesta categoria. Não há outra para sortear!</span>`;
       }
     } else {
       randomPickedCard.classList.remove('card-reroll');
@@ -1241,15 +1371,20 @@ function triggerRerollAnimation(isOnlyOne = false) {
   }
 }
 
-function showRandomTaskModal(task, executionSeconds, totalCandidates) {
+function showRandomTaskModal(task, executionSeconds, totalCandidates, category = 'all') {
   if (!randomTaskModal || !randomPickedCard) return;
+
+  if (btnStartRandomTask) btnStartRandomTask.disabled = false;
+  if (btnRerollRandomTask) btnRerollRandomTask.disabled = false;
 
   const taskMinutes = Math.max(1, Math.round(executionSeconds / 60));
   const subtasks = task.subtasks || [];
   const completedSubs = subtasks.filter(s => s.completed).length;
 
   if (randomModalSubtitle) {
-    randomModalSubtitle.textContent = 'Selecionada aleatoriamente entre as tarefas sem blocos iniciados hoje';
+    randomModalSubtitle.textContent = category === 'all'
+      ? 'Selecionada aleatoriamente entre todas as categorias sem blocos iniciados hoje'
+      : `Selecionada aleatoriamente na categoria "${category}" sem blocos hoje`;
   }
 
   randomPickedCard.innerHTML = `
@@ -1268,8 +1403,8 @@ function showRandomTaskModal(task, executionSeconds, totalCandidates) {
 
     <div class="random-info-note">
       ${totalCandidates > 1 
-        ? `<span>🎲 Sorteada entre <strong>${totalCandidates} tarefas</strong> sem blocos hoje (${taskMinutes}m).</span>` 
-        : `<span>⭐ Esta é a <strong>única tarefa</strong> pendente sem blocos hoje (${taskMinutes}m).</span>`
+        ? `<span>🎲 Sorteada entre <strong>${totalCandidates} tarefas</strong> ${category === 'all' ? 'de todas as categorias' : `da categoria <strong>${escapeHtml(category)}</strong>`} sem blocos hoje (${taskMinutes}m).</span>` 
+        : `<span>⭐ Esta é a <strong>única tarefa</strong> ${category === 'all' ? '' : `da categoria <strong>${escapeHtml(category)}</strong> `}sem blocos hoje (${taskMinutes}m).</span>`
       }
     </div>
   `;
@@ -1806,6 +1941,7 @@ function handleSaveEditSubtask(e) {
 // Renderização Geral
 function render() {
   updateMetrics();
+  updateRandomCategoryOptions();
   renderTasks();
 }
 

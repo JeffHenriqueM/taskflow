@@ -231,9 +231,14 @@
               <option value="due-date">📅 Prazo mais próximo</option>
             </select>
           </div>
-          <button type="button" id="btnPickRandomTask" class="btn btn-random" title="Sortear entre as tarefas sem blocos iniciados hoje">
-            <span class="random-dice-icon">🎲</span> Escolher Aleatoriamente
-          </button>
+          <div class="random-picker-group">
+            <select id="randomCategorySelect" class="random-toolbar-select" title="Filtrar categoria para o sorteio aleatório">
+              <option value="all">🎲 Todas as Categorias</option>
+            </select>
+            <button type="button" id="btnPickRandomTask" class="btn btn-random" title="Sortear entre as tarefas sem blocos iniciados hoje">
+              <span class="random-dice-icon">🎲</span> Escolher Aleatoriamente
+            </button>
+          </div>
         </section>
 
         <!-- Tasks List -->
@@ -314,6 +319,15 @@
       <div class="modal-alarm-icon random-modal-icon">🎲</div>
       <h2>Tarefa Sorteada!</h2>
       <p class="subtitle" id="randomModalSubtitle">Selecionada aleatoriamente entre as tarefas sem blocos iniciados hoje</p>
+
+      <div class="random-modal-category-box">
+        <label for="modalRandomCategorySelect" class="random-modal-category-label">
+          <span>📁 Categoria:</span>
+        </label>
+        <select id="modalRandomCategorySelect" class="random-modal-category-select" title="Trocar categoria do sorteio">
+          <option value="all">🎲 Todas as Categorias</option>
+        </select>
+      </div>
 
       <div class="random-picked-card" id="randomPickedCard">
         <!-- Inserido dinamicamente via JS -->
