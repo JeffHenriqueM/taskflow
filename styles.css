@@ -60,6 +60,24 @@ body {
   padding: 24px 20px 60px;
 }
 
+/* Utilities & Visibility */
+.hidden {
+  display: none !important;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+#todayView {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
 /* Header */
 .app-header {
   margin-bottom: 28px;
@@ -738,6 +756,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-bottom: 24px;
 }
 
 .empty-state {
@@ -1034,7 +1053,8 @@ textarea {
 .add-subtask-form {
   display: flex;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 10px;
+  margin-bottom: 4px;
 }
 
 .add-subtask-form input {
@@ -1220,7 +1240,9 @@ textarea {
 .history-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  margin-top: 16px;
+  margin-bottom: 40px;
 }
 
 .history-header {
