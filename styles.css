@@ -2005,6 +2005,18 @@ textarea {
   box-shadow: 0 1px 4px rgba(239, 68, 68, 0.15);
 }
 
+.badge-pomodoro.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.badge-pomodoro.clickable:hover {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: #f87171;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 .pomodoro-alarm-icon {
   background: rgba(239, 68, 68, 0.2);
   color: #f87171;
@@ -2410,6 +2422,223 @@ textarea {
   border-radius: 4px;
   margin-left: 4px;
 }
+
+/* ==========================================
+   Registro Manual de Tempo Executado
+   ========================================== */
+.btn-log-time {
+  background: rgba(99, 102, 241, 0.14) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-log-time:hover {
+  background: rgba(99, 102, 241, 0.28) !important;
+  color: #ffffff !important;
+  border-color: #818cf8 !important;
+  transform: translateY(-1px);
+}
+
+.log-time-modal-card {
+  max-width: 480px;
+  text-align: left;
+}
+
+.log-time-current-box {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.log-time-current-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.log-time-current-item .label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.log-time-current-item strong {
+  font-size: 15px;
+  color: var(--text-main);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.log-time-section {
+  margin-bottom: 16px;
+}
+
+.log-time-section .section-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.quick-time-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .quick-time-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.quick-time-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  text-align: center;
+}
+
+.quick-time-btn:hover {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: #818cf8;
+  color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.quick-time-btn.highlight {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.quick-time-btn.highlight:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.log-time-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-time-mode-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.log-time-mode-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.log-time-mode-tab input[type="radio"] {
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.log-time-mode-tab:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+.log-time-mode-tab:has(input:checked) {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.12);
+  color: #fff;
+}
+
+.time-inputs-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.time-inputs-row input {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.log-time-preview-box {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px dashed rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.log-time-preview-box .preview-line {
+  font-size: 14px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.log-time-preview-box .preview-line strong {
+  color: #818cf8;
+  font-size: 17px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.log-time-preview-box .preview-subline {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.log-time-complete-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-main);
+  cursor: pointer;
+  margin-bottom: 18px;
+  padding: 6px 0;
+}
+
+.log-time-complete-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--success);
+  cursor: pointer;
+}
+
 
 
 

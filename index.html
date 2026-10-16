@@ -332,6 +332,95 @@
     </div>
   </div>
 
+  <!-- Modal: Registrar Tempo Executado Manualmente -->
+  <div id="logTimeModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card log-time-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">⏱️</span>
+          <div>
+            <h2>Registrar Tempo Executado</h2>
+            <p class="subtitle" id="logTimeTaskSubtitle">Tarefa: ...</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeLogTimeModal()" title="Fechar">&times;</button>
+      </div>
+
+      <!-- Informações atuais da tarefa -->
+      <div class="log-time-current-box">
+        <div class="log-time-current-item">
+          <span class="label">Tempo dedicado hoje:</span>
+          <strong id="logTimeCurrentElapsed">0h 00m</strong>
+        </div>
+        <div class="log-time-current-item">
+          <span class="label">Blocos Pomodoro hoje:</span>
+          <strong id="logTimeCurrentBlocks">0 blocos</strong>
+        </div>
+      </div>
+
+      <!-- Botões de Atalho Rápido para Adicionar Tempo -->
+      <div class="log-time-section">
+        <label class="section-label">⚡ Adicionar rapidamente:</label>
+        <div class="quick-time-grid">
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(15)">+15 min</button>
+          <button type="button" class="quick-time-btn highlight" onclick="quickAddLogTime(25)">+25 min (1 bloco)</button>
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(30)">+30 min</button>
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(45)">+45 min</button>
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(60)">+1 hora</button>
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(90)">+1h 30m</button>
+          <button type="button" class="quick-time-btn" onclick="quickAddLogTime(120)">+2 horas</button>
+        </div>
+      </div>
+
+      <!-- Modo de inserção customizada -->
+      <form id="logTimeForm" class="log-time-form" onsubmit="handleSaveLogTime(event)">
+        <div class="log-time-mode-selector">
+          <label class="log-time-mode-tab">
+            <input type="radio" name="logTimeMode" value="add" checked onchange="updateLogTimePreview()">
+            <span>➕ Adicionar ao tempo atual</span>
+          </label>
+          <label class="log-time-mode-tab">
+            <input type="radio" name="logTimeMode" value="set" onchange="updateLogTimePreview()">
+            <span>🎯 Definir tempo total exato</span>
+          </label>
+        </div>
+
+        <div class="form-row time-inputs-row">
+          <div class="form-group flex-1">
+            <label for="logTimeHours">Horas</label>
+            <input type="number" id="logTimeHours" min="0" max="24" value="0" placeholder="0" oninput="updateLogTimePreview()">
+          </div>
+          <div class="form-group flex-1">
+            <label for="logTimeMinutes">Minutos</label>
+            <input type="number" id="logTimeMinutes" min="0" max="59" value="25" placeholder="25" oninput="updateLogTimePreview()">
+          </div>
+        </div>
+
+        <!-- Preview do resultado -->
+        <div class="log-time-preview-box" id="logTimePreviewBox">
+          <div class="preview-line">
+            <span>Tempo resultante hoje:</span>
+            <strong id="logTimePreviewTotal">25m</strong>
+          </div>
+          <div class="preview-subline" id="logTimePreviewBlocks">
+            Equivalente a 1 bloco de foco
+          </div>
+        </div>
+
+        <!-- Checkbox de conclusão opcional -->
+        <label class="checkbox-label log-time-complete-option">
+          <input type="checkbox" id="logTimeMarkCompleted">
+          <span>Marcar esta tarefa como <strong>Concluída</strong></span>
+        </label>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Salvar Tempo</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLogTimeModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal: Escolha Aleatória (Menor Tempo de Execução) -->
   <div id="randomTaskModal" class="app-modal-overlay hidden">
     <div class="app-modal-card random-modal-card">
@@ -416,8 +505,12 @@
             <input type="date" id="editTaskDueDate">
           </div>
           <div class="form-group" style="max-width: 120px;">
-            <label for="editTaskTimerMinutes">Duração (min)</label>
+            <label for="editTaskTimerMinutes">Bloco (min)</label>
             <input type="number" id="editTaskTimerMinutes" min="1" max="720" value="25" title="Duração do bloco Pomodoro">
+          </div>
+          <div class="form-group" style="max-width: 150px;">
+            <label for="editTaskElapsedMinutes">Tempo Dedicado (min)</label>
+            <input type="number" id="editTaskElapsedMinutes" min="0" max="1440" value="0" title="Tempo total já executado nesta tarefa hoje">
           </div>
         </div>
 

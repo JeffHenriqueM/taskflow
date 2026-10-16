@@ -317,6 +317,7 @@ const editTaskPrioritySelect = document.getElementById('editTaskPriority');
 const editTaskRecurrenceSelect = document.getElementById('editTaskRecurrence');
 const editTaskDueDateInput = document.getElementById('editTaskDueDate');
 const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes');
+const editTaskElapsedMinutesInput = document.getElementById('editTaskElapsedMinutes');
 const editTaskDescriptionInput = document.getElementById('editTaskDescription');
 const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
 const editNewSubtaskRecurrenceSelect = document.getElementById('editNewSubtaskRecurrence');
@@ -333,9 +334,22 @@ const modalEditSubtaskTitleInput = document.getElementById('modalEditSubtaskTitl
 const modalEditSubtaskRecurrenceSelect = document.getElementById('modalEditSubtaskRecurrence');
 const modalEditSubtaskDueDateInput = document.getElementById('modalEditSubtaskDueDate');
 
+// Modal de Registro Manual de Tempo
+const logTimeModal = document.getElementById('logTimeModal');
+const logTimeTaskSubtitle = document.getElementById('logTimeTaskSubtitle');
+const logTimeCurrentElapsed = document.getElementById('logTimeCurrentElapsed');
+const logTimeCurrentBlocks = document.getElementById('logTimeCurrentBlocks');
+const logTimeHoursInput = document.getElementById('logTimeHours');
+const logTimeMinutesInput = document.getElementById('logTimeMinutes');
+const logTimePreviewTotal = document.getElementById('logTimePreviewTotal');
+const logTimePreviewBlocks = document.getElementById('logTimePreviewBlocks');
+const logTimeMarkCompleted = document.getElementById('logTimeMarkCompleted');
+const logTimeForm = document.getElementById('logTimeForm');
+
 let currentConfiguringTaskId = null;
 let currentFinishedTaskId = null;
 let currentRandomChosenTaskId = null;
+let currentLoggingTaskId = null;
 let editTaskTempSubtasks = [];
 
 // Inicialização
@@ -857,6 +871,11 @@ function setupEventListeners() {
   if (editSubtaskModal) {
     editSubtaskModal.addEventListener('click', (e) => {
       if (e.target === editSubtaskModal) closeEditSubtaskModal();
+    });
+  }
+  if (logTimeModal) {
+    logTimeModal.addEventListener('click', (e) => {
+      if (e.target === logTimeModal) closeLogTimeModal();
     });
   }
 }
@@ -1606,6 +1625,154 @@ function setTaskDuration(taskId, minutes) {
   }
 }
 
+// ==========================================
+// Registro Manual de Tempo Executado
+// ==========================================
+
+function openLogTimeModal(taskId, e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  currentLoggingTaskId = taskId;
+  if (logTimeTaskSubtitle) {
+    logTimeTaskSubtitle.textContent = `Tarefa: "${task.title}"`;
+  }
+
+  const currentSecs = getTaskCurrentSeconds(task);
+  const target = getTaskTargetSeconds(task) || 1500;
+  const currentBlocks = task.pomodoroCount !== undefined ? task.pomodoroCount : Math.floor(currentSecs / target);
+
+  if (logTimeCurrentElapsed) {
+    logTimeCurrentElapsed.textContent = formatReadableTime(currentSecs);
+  }
+  if (logTimeCurrentBlocks) {
+    logTimeCurrentBlocks.textContent = `${currentBlocks} ${currentBlocks === 1 ? 'bloco' : 'blocos'}`;
+  }
+
+  // Modo padrão: Adicionar ao tempo atual
+  const addRadio = document.querySelector('input[name="logTimeMode"][value="add"]');
+  if (addRadio) addRadio.checked = true;
+
+  // Sugestão inicial: duração do bloco Pomodoro ou 25 min
+  const defaultMins = Math.round(target / 60) || 25;
+  if (logTimeHoursInput) logTimeHoursInput.value = 0;
+  if (logTimeMinutesInput) logTimeMinutesInput.value = defaultMins;
+
+  if (logTimeMarkCompleted) {
+    logTimeMarkCompleted.checked = !!task.completed;
+  }
+
+  updateLogTimePreview();
+
+  if (logTimeModal) {
+    logTimeModal.classList.remove('hidden');
+  }
+  if (logTimeMinutesInput) {
+    setTimeout(() => logTimeMinutesInput.select(), 50);
+  }
+}
+
+function closeLogTimeModal() {
+  if (logTimeModal) {
+    logTimeModal.classList.add('hidden');
+  }
+  currentLoggingTaskId = null;
+}
+
+function quickAddLogTime(minutes) {
+  const addRadio = document.querySelector('input[name="logTimeMode"][value="add"]');
+  if (addRadio) addRadio.checked = true;
+
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (logTimeHoursInput) logTimeHoursInput.value = hrs;
+  if (logTimeMinutesInput) logTimeMinutesInput.value = mins;
+
+  updateLogTimePreview();
+}
+
+function updateLogTimePreview() {
+  if (!currentLoggingTaskId) return;
+  const task = tasks.find(t => t.id === currentLoggingTaskId);
+  if (!task) return;
+
+  const modeRadio = document.querySelector('input[name="logTimeMode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'add';
+
+  const hrs = Math.max(0, parseInt(logTimeHoursInput ? logTimeHoursInput.value : '0', 10) || 0);
+  const mins = Math.max(0, parseInt(logTimeMinutesInput ? logTimeMinutesInput.value : '0', 10) || 0);
+  const inputSecs = (hrs * 3600) + (mins * 60);
+
+  const currentSecs = getTaskCurrentSeconds(task);
+  const targetSecs = getTaskTargetSeconds(task) || 1500;
+
+  let resultingSecs = 0;
+  if (mode === 'add') {
+    resultingSecs = currentSecs + inputSecs;
+  } else {
+    resultingSecs = inputSecs;
+  }
+
+  const resultingBlocks = Math.floor(resultingSecs / targetSecs);
+
+  if (logTimePreviewTotal) {
+    logTimePreviewTotal.textContent = formatReadableTime(resultingSecs);
+  }
+  if (logTimePreviewBlocks) {
+    logTimePreviewBlocks.textContent = resultingBlocks === 1 
+      ? 'Equivalente a 1 bloco de foco' 
+      : `Equivalente a ${resultingBlocks} blocos de foco`;
+  }
+}
+
+function handleSaveLogTime(e) {
+  if (e) e.preventDefault();
+  if (!currentLoggingTaskId) return;
+  const task = tasks.find(t => t.id === currentLoggingTaskId);
+  if (!task) return;
+
+  // Se o timer estiver rodando nesta tarefa, pausa antes de registrar
+  if (task.isRunning) {
+    pauseTimer(task.id);
+  }
+
+  const modeRadio = document.querySelector('input[name="logTimeMode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'add';
+
+  const hrs = Math.max(0, parseInt(logTimeHoursInput ? logTimeHoursInput.value : '0', 10) || 0);
+  const mins = Math.max(0, parseInt(logTimeMinutesInput ? logTimeMinutesInput.value : '0', 10) || 0);
+  const inputSecs = (hrs * 3600) + (mins * 60);
+
+  const currentSecs = task.elapsedSeconds || 0;
+  const target = getTaskTargetSeconds(task) || 1500;
+
+  let finalSecs = 0;
+  if (mode === 'add') {
+    finalSecs = currentSecs + inputSecs;
+  } else {
+    finalSecs = inputSecs;
+  }
+
+  task.elapsedSeconds = Math.max(0, finalSecs);
+  task.pomodoroCount = Math.floor(task.elapsedSeconds / target);
+  task.blockElapsedSeconds = 0;
+  task.isRunning = false;
+  task.timerStartedAt = null;
+
+  if (logTimeMarkCompleted && logTimeMarkCompleted.checked) {
+    task.completed = true;
+  }
+
+  saveTasks();
+  render();
+  closeLogTimeModal();
+  dbUpsertTask(task);
+}
+
 // Notificações e Alarme de Áudio
 function playAlarmSound() {
   try {
@@ -1926,6 +2093,7 @@ function openEditTaskModal(taskId) {
   if (editTaskRecurrenceSelect) editTaskRecurrenceSelect.value = task.recurrence || 'diaria';
   if (editTaskDueDateInput) editTaskDueDateInput.value = task.dueDate || '';
   if (editTaskTimerMinutesInput) editTaskTimerMinutesInput.value = Math.round(getTaskTargetSeconds(task) / 60);
+  if (editTaskElapsedMinutesInput) editTaskElapsedMinutesInput.value = Math.round((task.elapsedSeconds || 0) / 60);
   if (editTaskDescriptionInput) editTaskDescriptionInput.value = task.description || '';
 
   editTaskTempSubtasks = JSON.parse(JSON.stringify(task.subtasks || []));
@@ -2030,6 +2198,12 @@ function handleSaveEditTask(e) {
     if (!task.isRunning) {
       task.blockElapsedSeconds = 0;
     }
+  }
+
+  if (editTaskElapsedMinutesInput) {
+    const newElapsedMins = Math.max(0, parseInt(editTaskElapsedMinutesInput.value, 10) || 0);
+    task.elapsedSeconds = newElapsedMins * 60;
+    task.pomodoroCount = Math.floor(task.elapsedSeconds / (newTargetSecs || 1500));
   }
 
   saveTasks();
@@ -2312,8 +2486,12 @@ function renderTasks() {
                 ${formatDueDateBadge(task.dueDate, task.completed)}
                 ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
                 ${(pomodoroCount > 0 || dedicatedSeconds > 0) ? `
-                  <span class="badge badge-pomodoro" title="${pomodoroCount} bloco(s) de foco hoje • Total dedicado: ${formatReadableTime(dedicatedSeconds)}">
-                    🍅 ${pomodoroCount > 0 ? `${pomodoroCount} ${pomodoroCount === 1 ? 'bloco' : 'blocos'} • ` : ''}${formatReadableTime(dedicatedSeconds)}
+                  <span 
+                    class="badge badge-pomodoro clickable" 
+                    onclick="openLogTimeModal('${task.id}', event)" 
+                    title="${pomodoroCount} bloco(s) de foco hoje • Total dedicado: ${formatReadableTime(dedicatedSeconds)} (Clique para registrar ou ajustar tempo)"
+                  >
+                    🍅 ${pomodoroCount > 0 ? `${pomodoroCount} ${pomodoroCount === 1 ? 'bloco' : 'blocos'} • ` : ''}${formatReadableTime(dedicatedSeconds)} ✏️
                   </span>
                 ` : ''}
               </div>
@@ -2347,6 +2525,9 @@ function renderTasks() {
               `}
               <button class="btn btn-secondary btn-sm" onclick="resetTimer('${task.id}')" title="Reiniciar Contagem">
                 ↺
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm btn-log-time" onclick="openLogTimeModal('${task.id}', event)" title="Registrar tempo executado manualmente (sem iniciar o cronômetro)">
+                ⏱️ + Tempo
               </button>
             </div>
             <div class="task-actions">
@@ -2699,6 +2880,11 @@ window.applyTimerPreset = applyTimerPreset;
 window.closeTimerFinishedModal = closeTimerFinishedModal;
 window.pickRandomTask = pickRandomTask;
 window.closeRandomTaskModal = closeRandomTaskModal;
+window.openLogTimeModal = openLogTimeModal;
+window.closeLogTimeModal = closeLogTimeModal;
+window.quickAddLogTime = quickAddLogTime;
+window.updateLogTimePreview = updateLogTimePreview;
+window.handleSaveLogTime = handleSaveLogTime;
 
 // ==========================================
 // INTEGRAÇÃO COM SUPABASE (Nuvem em Tempo Real)
@@ -3117,3 +3303,8 @@ window.closeEditSubtaskModal = closeEditSubtaskModal;
 window.removeInitialSubtask = removeInitialSubtask;
 window.toggleHistoryCard = toggleHistoryCard;
 window.deleteHistoryDay = deleteHistoryDay;
+window.openLogTimeModal = openLogTimeModal;
+window.closeLogTimeModal = closeLogTimeModal;
+window.quickAddLogTime = quickAddLogTime;
+window.updateLogTimePreview = updateLogTimePreview;
+window.handleSaveLogTime = handleSaveLogTime;
