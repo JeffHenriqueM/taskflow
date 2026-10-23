@@ -181,13 +181,18 @@ let openHistoryCards = new Set();
 let initialSubtasks = [];
 let activeFilter = 'all';
 let searchQuery = '';
+let analysisCategoryFilter = 'all';
+let analysisSeverityFilter = 'all';
+let analysisSort = 'neglect-desc';
 
 // Elementos DOM
 const currentDayTitle = document.getElementById('currentDayTitle');
 const currentDaySubtitle = document.getElementById('currentDaySubtitle');
 const tabToday = document.getElementById('tabToday');
 const tabHistory = document.getElementById('tabHistory');
+const tabAnalysis = document.getElementById('tabAnalysis');
 const historyBadge = document.getElementById('historyBadge');
+const analysisBadge = document.getElementById('analysisBadge');
 const btnCompleteDay = document.getElementById('btnCompleteDay');
 
 const lblTotalTasks = document.getElementById('lblTotalTasks');
@@ -198,8 +203,20 @@ const lblTotalPomodoros = document.getElementById('lblTotalPomodoros');
 
 const todayView = document.getElementById('todayView');
 const historyView = document.getElementById('historyView');
+const analysisView = document.getElementById('analysisView');
 const historyListContainer = document.getElementById('historyListContainer');
 const historyOverallBadge = document.getElementById('historyOverallBadge');
+
+// Elementos da Aba de Análise
+const btnToggleAnalysisConfig = document.getElementById('btnToggleAnalysisConfig');
+const btnToggleAnalysisConfigText = document.getElementById('btnToggleAnalysisConfigText');
+const analysisConfigPanel = document.getElementById('analysisConfigPanel');
+const analysisTasksCheckboxList = document.getElementById('analysisTasksCheckboxList');
+const analysisKpiGrid = document.getElementById('analysisKpiGrid');
+const analysisCardsContainer = document.getElementById('analysisCardsContainer');
+const analysisCategorySelect = document.getElementById('analysisCategorySelect');
+const analysisSeveritySelect = document.getElementById('analysisSeveritySelect');
+const analysisSortSelect = document.getElementById('analysisSortSelect');
 
 const taskFormCard = document.getElementById('taskFormCard');
 const taskFormHeader = document.getElementById('taskFormHeader');
@@ -213,6 +230,7 @@ const taskPrioritySelect = document.getElementById('taskPriority');
 const taskRecurrenceSelect = document.getElementById('taskRecurrence');
 const taskDueDateInput = document.getElementById('taskDueDate');
 const taskTimerMinutesInput = document.getElementById('taskTimerMinutes');
+const taskIncludeInAnalysisCheckbox = document.getElementById('taskIncludeInAnalysis');
 const taskDescriptionInput = document.getElementById('taskDescription');
 const initialSubtaskInput = document.getElementById('initialSubtaskInput');
 const initialSubtaskRecurrenceSelect = document.getElementById('initialSubtaskRecurrence');
@@ -319,6 +337,7 @@ const editTaskDueDateInput = document.getElementById('editTaskDueDate');
 const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes');
 const editTaskElapsedMinutesInput = document.getElementById('editTaskElapsedMinutes');
 const editTaskDescriptionInput = document.getElementById('editTaskDescription');
+const editTaskIncludeInAnalysisCheckbox = document.getElementById('editTaskIncludeInAnalysis');
 const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
 const editNewSubtaskRecurrenceSelect = document.getElementById('editNewSubtaskRecurrence');
 const editNewSubtaskDueDateInput = document.getElementById('editNewSubtaskDueDate');
@@ -425,6 +444,12 @@ function updateDateDisplay() {
         ? '1 dia arquivado para consulta' 
         : `${count} dias arquivados para consulta`;
     }
+  } else if (activeTab === 'analysis') {
+    if (currentDayTitle) currentDayTitle.textContent = '📊 Análise de Tarefas Deixadas de Lado';
+    if (currentDaySubtitle) {
+      const monitored = tasks.filter(t => !!t.includeInAnalysis);
+      currentDaySubtitle.textContent = `${monitored.length} de ${tasks.length} tarefas selecionadas para monitoramento`;
+    }
   } else {
     const todayKey = getTodayDateKey();
     if (currentDayTitle) currentDayTitle.textContent = formatDateDisplay(todayKey);
@@ -460,6 +485,7 @@ function loadData() {
     t.targetSeconds = t.targetSeconds || 1500;
     t.recurrence = t.recurrence || 'diaria';
     t.dueDate = t.dueDate || null;
+    t.includeInAnalysis = t.includeInAnalysis !== undefined ? !!t.includeInAnalysis : false;
     if (t.category) {
       const catLower = t.category.toLowerCase().trim();
       if (catLower === 'villamor') t.category = 'Villamor';
@@ -878,17 +904,42 @@ function setupEventListeners() {
       if (e.target === logTimeModal) closeLogTimeModal();
     });
   }
+
+  // Listeners da Aba de Análise
+  if (btnToggleAnalysisConfig) {
+    btnToggleAnalysisConfig.addEventListener('click', toggleAnalysisConfig);
+  }
+  if (analysisCategorySelect) {
+    analysisCategorySelect.addEventListener('change', (e) => {
+      analysisCategoryFilter = e.target.value;
+      renderAnalysis();
+    });
+  }
+  if (analysisSeveritySelect) {
+    analysisSeveritySelect.addEventListener('change', (e) => {
+      analysisSeverityFilter = e.target.value;
+      renderAnalysis();
+    });
+  }
+  if (analysisSortSelect) {
+    analysisSortSelect.addEventListener('change', (e) => {
+      analysisSort = e.target.value;
+      renderAnalysis();
+    });
+  }
 }
 
-// Alternância entre Hoje e Histórico
+// Alternância entre Hoje, Histórico e Análise
 function setupTabSwitching() {
   if (tabToday) {
     tabToday.addEventListener('click', () => {
       activeTab = 'today';
       tabToday.classList.add('active');
       tabHistory.classList.remove('active');
+      if (tabAnalysis) tabAnalysis.classList.remove('active');
       if (todayView) todayView.classList.remove('hidden');
       if (historyView) historyView.classList.add('hidden');
+      if (analysisView) analysisView.classList.add('hidden');
       if (btnCompleteDay) btnCompleteDay.style.display = 'inline-flex';
       updateDateDisplay();
       render();
@@ -900,12 +951,30 @@ function setupTabSwitching() {
       activeTab = 'history';
       tabHistory.classList.add('active');
       tabToday.classList.remove('active');
+      if (tabAnalysis) tabAnalysis.classList.remove('active');
       if (todayView) todayView.classList.add('hidden');
       if (historyView) historyView.classList.remove('hidden');
+      if (analysisView) analysisView.classList.add('hidden');
       if (btnCompleteDay) btnCompleteDay.style.display = 'none';
       updateDateDisplay();
       updateMetrics();
       renderHistory();
+    });
+  }
+
+  if (tabAnalysis) {
+    tabAnalysis.addEventListener('click', () => {
+      activeTab = 'analysis';
+      tabAnalysis.classList.add('active');
+      tabToday.classList.remove('active');
+      tabHistory.classList.remove('active');
+      if (todayView) todayView.classList.add('hidden');
+      if (historyView) historyView.classList.add('hidden');
+      if (analysisView) analysisView.classList.remove('hidden');
+      if (btnCompleteDay) btnCompleteDay.style.display = 'none';
+      updateDateDisplay();
+      updateMetrics();
+      renderAnalysis();
     });
   }
 }
@@ -1004,6 +1073,7 @@ function handleCreateTask(e) {
   const recurrence = taskRecurrenceSelect ? taskRecurrenceSelect.value : 'diaria';
   const dueDate = taskDueDateInput ? taskDueDateInput.value : '';
   const category = getSelectedCategory(taskCategoryInput, taskCategoryCustomInput);
+  const includeInAnalysis = taskIncludeInAnalysisCheckbox ? !!taskIncludeInAnalysisCheckbox.checked : false;
 
   const newTask = {
     id: generateId(),
@@ -1012,6 +1082,7 @@ function handleCreateTask(e) {
     priority: taskPrioritySelect.value || 'media',
     recurrence: recurrence || 'diaria',
     dueDate: dueDate || null,
+    includeInAnalysis: includeInAnalysis,
     description: taskDescriptionInput.value.trim(),
     completed: false,
     createdAt: Date.now(),
@@ -1029,6 +1100,7 @@ function handleCreateTask(e) {
 
   // Reset form
   taskForm.reset();
+  if (taskIncludeInAnalysisCheckbox) taskIncludeInAnalysisCheckbox.checked = false;
   if (taskTimerMinutesInput) taskTimerMinutesInput.value = '25';
   if (taskRecurrenceSelect) taskRecurrenceSelect.value = 'diaria';
   if (taskCategoryInput) taskCategoryInput.value = 'Villamor';
@@ -2095,6 +2167,9 @@ function openEditTaskModal(taskId) {
   if (editTaskTimerMinutesInput) editTaskTimerMinutesInput.value = Math.round(getTaskTargetSeconds(task) / 60);
   if (editTaskElapsedMinutesInput) editTaskElapsedMinutesInput.value = Math.round((task.elapsedSeconds || 0) / 60);
   if (editTaskDescriptionInput) editTaskDescriptionInput.value = task.description || '';
+  if (editTaskIncludeInAnalysisCheckbox) {
+    editTaskIncludeInAnalysisCheckbox.checked = !!task.includeInAnalysis;
+  }
 
   editTaskTempSubtasks = JSON.parse(JSON.stringify(task.subtasks || []));
   if (editNewSubtaskInput) editNewSubtaskInput.value = '';
@@ -2191,6 +2266,9 @@ function handleSaveEditTask(e) {
   task.recurrence = editTaskRecurrenceSelect.value || 'diaria';
   task.dueDate = editTaskDueDateInput.value || null;
   task.description = editTaskDescriptionInput.value.trim();
+  if (editTaskIncludeInAnalysisCheckbox) {
+    task.includeInAnalysis = !!editTaskIncludeInAnalysisCheckbox.checked;
+  }
   task.subtasks = JSON.parse(JSON.stringify(editTaskTempSubtasks));
 
   if (oldTarget !== newTargetSecs) {
@@ -2259,13 +2337,32 @@ function handleSaveEditSubtask(e) {
 // Renderização Geral
 function render() {
   updateMetrics();
+  updateAnalysisBadge();
   updateRandomCategoryOptions();
   renderTasks();
+  if (activeTab === 'analysis') {
+    renderAnalysis();
+  }
+}
+
+function updateAnalysisBadge() {
+  if (!analysisBadge) return;
+  const monitoredTasks = tasks.filter(t => !!t.includeInAnalysis);
+  const criticalCount = monitoredTasks.filter(t => calculateTaskNeglect(t).severity === 'critical').length;
+  if (criticalCount > 0) {
+    analysisBadge.textContent = criticalCount;
+    analysisBadge.classList.remove('hidden');
+    analysisBadge.style.background = 'var(--danger)';
+  } else {
+    analysisBadge.classList.add('hidden');
+  }
 }
 
 function updateMetrics() {
   if (activeTab === 'history') {
     updateHistoryMetrics();
+  } else if (activeTab === 'analysis') {
+    updateAnalysisMetrics();
   } else {
     updateTodayMetrics();
   }
@@ -2484,6 +2581,15 @@ function renderTasks() {
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
                 ${formatDueDateBadge(task.dueDate, task.completed)}
+                ${task.includeInAnalysis ? `
+                  <span 
+                    class="badge badge-analysis-active clickable" 
+                    onclick="toggleTaskAnalysis('${task.id}', event)" 
+                    title="Esta tarefa participa da análise de tarefas deixadas de lado (clique para remover da análise)"
+                  >
+                    📊 Na Análise
+                  </span>
+                ` : ''}
                 ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
                 ${(pomodoroCount > 0 || dedicatedSeconds > 0) ? `
                   <span 
@@ -2850,6 +2956,480 @@ function deleteHistoryDay(dateKey, e) {
   }
 }
 
+// ==========================================
+// Módulo de Análise de Tarefas Deixadas de Lado
+// ==========================================
+
+function calculateTaskNeglect(task) {
+  const dates = Object.keys(dailyHistory || {}).sort();
+  const todayKey = getTodayDateKey();
+  
+  let daysRecordedCount = 1; // Hoje conta como 1
+  let completedDaysCount = task.completed ? 1 : 0;
+  let pendingDaysCount = task.completed ? 0 : 1;
+  let totalTimeSpent = getTaskCurrentSeconds(task);
+  let lastCompletedDate = task.completed ? todayKey : null;
+  let lastCompletedDisplay = task.completed ? 'Hoje' : null;
+  
+  // Analisar histórico dos dias arquivados
+  dates.forEach(dateKey => {
+    const entry = dailyHistory[dateKey];
+    if (!entry || !Array.isArray(entry.tasks)) return;
+    
+    const histTask = entry.tasks.find(t => t.id === task.id || (t.title && task.title && t.title.trim().toLowerCase() === task.title.trim().toLowerCase()));
+    if (histTask) {
+      daysRecordedCount++;
+      const isDone = !!histTask.completed;
+      if (isDone) {
+        completedDaysCount++;
+        if (!lastCompletedDate || dateKey > lastCompletedDate) {
+          lastCompletedDate = dateKey;
+          lastCompletedDisplay = formatDateDisplay(dateKey);
+        }
+      } else {
+        pendingDaysCount++;
+      }
+      totalTimeSpent += (histTask.elapsedSeconds || 0);
+    }
+  });
+
+  // Cálculo da sequência de dias consecutivos sem conclusão (streak)
+  let consecutivePendingStreak = 0;
+  if (!task.completed) {
+    consecutivePendingStreak = 1;
+    const descDates = [...dates].reverse();
+    for (const dKey of descDates) {
+      const entry = dailyHistory[dKey];
+      if (!entry || !Array.isArray(entry.tasks)) break;
+      const histTask = entry.tasks.find(t => t.id === task.id || (t.title && task.title && t.title.trim().toLowerCase() === task.title.trim().toLowerCase()));
+      if (histTask) {
+        if (!histTask.completed) {
+          consecutivePendingStreak++;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Taxa de negligência (% dos dias registrados em que ficou pendente)
+  const neglectPercent = daysRecordedCount > 0 
+    ? Math.round((pendingDaysCount / daysRecordedCount) * 100) 
+    : 0;
+
+  // Verificação de prazo
+  let dueDateAlert = null;
+  if (task.dueDate && !task.completed) {
+    if (task.dueDate < todayKey) {
+      dueDateAlert = 'overdue';
+    } else if (task.dueDate === todayKey) {
+      dueDateAlert = 'today';
+    } else {
+      const diffDays = Math.ceil((new Date(task.dueDate + 'T23:59:59') - new Date()) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 2) dueDateAlert = 'soon';
+    }
+  }
+
+  // Grau de Severidade
+  let severity = 'good';
+  let statusMessage = '';
+
+  if (task.completed) {
+    severity = 'good';
+    statusMessage = 'Concluída hoje! 🎉';
+  } else if (consecutivePendingStreak >= 3 || dueDateAlert === 'overdue' || (daysRecordedCount >= 3 && neglectPercent >= 75)) {
+    severity = 'critical';
+    if (dueDateAlert === 'overdue') {
+      statusMessage = `Prazo Vencido (${formatShortDate(task.dueDate)})`;
+    } else if (consecutivePendingStreak >= 3) {
+      statusMessage = `Sem conclusão há ${consecutivePendingStreak} dias seguidos`;
+    } else {
+      statusMessage = `Pendente em ${neglectPercent}% dos dias arquivados`;
+    }
+  } else if (consecutivePendingStreak >= 1 || dueDateAlert === 'today' || (daysRecordedCount >= 2 && neglectPercent >= 50)) {
+    severity = 'warning';
+    if (dueDateAlert === 'today') {
+      statusMessage = 'Prazo vence hoje e ainda não foi feita';
+    } else if (consecutivePendingStreak === 2) {
+      statusMessage = 'Pendente ontem e hoje (2 dias)';
+    } else {
+      statusMessage = 'Pendente na rotina de hoje';
+    }
+  } else {
+    severity = 'good';
+    statusMessage = 'Em dia com a rotina';
+  }
+
+  return {
+    daysRecordedCount,
+    completedDaysCount,
+    pendingDaysCount,
+    neglectPercent,
+    consecutivePendingStreak,
+    totalTimeSpent,
+    lastCompletedDate,
+    lastCompletedDisplay: lastCompletedDisplay || 'Nunca concluída nos registros',
+    dueDateAlert,
+    severity,
+    statusMessage
+  };
+}
+
+function updateAnalysisMetrics() {
+  const monitored = tasks.filter(t => !!t.includeInAnalysis);
+  const critical = monitored.filter(t => calculateTaskNeglect(t).severity === 'critical');
+  const healthy = monitored.filter(t => t.completed || calculateTaskNeglect(t).severity === 'good');
+  let totalSecs = 0;
+  let totalPomodoros = 0;
+  monitored.forEach(t => {
+    totalSecs += getTaskCurrentSeconds(t);
+    totalPomodoros += (t.pomodoroCount || 0);
+  });
+
+  if (lblTotalTasks) lblTotalTasks.textContent = 'Tarefas Monitoradas';
+  if (lblPendingTasks) lblPendingTasks.textContent = 'Críticas / Deixadas de Lado';
+  if (lblCompletedTasks) lblCompletedTasks.textContent = 'Em Dia / Concluídas';
+  if (lblTotalTime) lblTotalTime.textContent = 'Tempo Hoje (Monitoradas)';
+  if (lblTotalPomodoros) lblTotalPomodoros.textContent = 'Blocos Pomodoro';
+
+  if (statTotalTasks) statTotalTasks.textContent = `${monitored.length}/${tasks.length}`;
+  if (statPendingTasks) statPendingTasks.textContent = critical.length;
+  if (statCompletedTasks) statCompletedTasks.textContent = healthy.length;
+  if (statTotalTime) statTotalTime.textContent = formatReadableTime(totalSecs);
+  if (statTotalPomodoros) statTotalPomodoros.textContent = totalPomodoros;
+}
+
+function renderAnalysis() {
+  if (!analysisCardsContainer) return;
+
+  const monitoredTasks = tasks.filter(t => !!t.includeInAnalysis);
+  const taskStatsMap = new Map();
+  tasks.forEach(t => {
+    taskStatsMap.set(t.id, calculateTaskNeglect(t));
+  });
+
+  // Atualiza badge de alerta de tarefas críticas na aba
+  const criticalCount = monitoredTasks.filter(t => taskStatsMap.get(t.id).severity === 'critical').length;
+  if (analysisBadge) {
+    if (criticalCount > 0) {
+      analysisBadge.textContent = criticalCount;
+      analysisBadge.classList.remove('hidden');
+      analysisBadge.style.background = 'var(--danger)';
+    } else {
+      analysisBadge.classList.add('hidden');
+    }
+  }
+
+  // Renderiza drawer de configuração rápida (lista de checkboxes de todas as tarefas)
+  if (analysisTasksCheckboxList) {
+    if (tasks.length === 0) {
+      analysisTasksCheckboxList.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 8px;">Nenhuma tarefa cadastrada.</div>`;
+    } else {
+      analysisTasksCheckboxList.innerHTML = tasks.map(t => {
+        const isChecked = !!t.includeInAnalysis;
+        return `
+          <div class="analysis-checkbox-item ${isChecked ? 'checked' : ''}" onclick="toggleTaskAnalysis('${t.id}', event)">
+            <div class="analysis-checkbox-item-left">
+              <input 
+                type="checkbox" 
+                ${isChecked ? 'checked' : ''} 
+                onclick="event.stopPropagation(); toggleTaskAnalysis('${t.id}', event)"
+              >
+              <span class="analysis-checkbox-item-title">${escapeHtml(t.title)}</span>
+            </div>
+            ${formatCategoryBadge(t.category)}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // KPI Cards
+  if (analysisKpiGrid) {
+    let totalTimeMonitored = 0;
+    let sumNeglectPercent = 0;
+    monitoredTasks.forEach(t => {
+      const st = taskStatsMap.get(t.id);
+      totalTimeMonitored += st.totalTimeSpent;
+      sumNeglectPercent += st.neglectPercent;
+    });
+    const avgNeglect = monitoredTasks.length > 0 
+      ? Math.round(sumNeglectPercent / monitoredTasks.length) 
+      : 0;
+
+    analysisKpiGrid.innerHTML = `
+      <div class="analysis-kpi-card">
+        <div class="analysis-kpi-icon purple">🎯</div>
+        <div class="analysis-kpi-info">
+          <span class="analysis-kpi-label">Tarefas Monitoradas</span>
+          <span class="analysis-kpi-value">${monitoredTasks.length} de ${tasks.length}</span>
+          <span class="analysis-kpi-sub">${tasks.length - monitoredTasks.length} ignoradas na análise</span>
+        </div>
+      </div>
+      <div class="analysis-kpi-card">
+        <div class="analysis-kpi-icon red">🚨</div>
+        <div class="analysis-kpi-info">
+          <span class="analysis-kpi-label">Em Estado Crítico</span>
+          <span class="analysis-kpi-value">${criticalCount}</span>
+          <span class="analysis-kpi-sub">acumulando vários dias sem foco</span>
+        </div>
+      </div>
+      <div class="analysis-kpi-card">
+        <div class="analysis-kpi-icon yellow">📉</div>
+        <div class="analysis-kpi-info">
+          <span class="analysis-kpi-label">Taxa Média de Negligência</span>
+          <span class="analysis-kpi-value">${avgNeglect}%</span>
+          <span class="analysis-kpi-sub">tempo médio em pendência</span>
+        </div>
+      </div>
+      <div class="analysis-kpi-card">
+        <div class="analysis-kpi-icon green">⏱️</div>
+        <div class="analysis-kpi-info">
+          <span class="analysis-kpi-label">Tempo Acumulado</span>
+          <span class="analysis-kpi-value">${formatReadableTime(totalTimeMonitored)}</span>
+          <span class="analysis-kpi-sub">dedicado nas tarefas monitoradas</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Se nenhuma tarefa participa da análise, exibe banner inicial
+  if (monitoredTasks.length === 0) {
+    analysisCardsContainer.innerHTML = `
+      <div class="analysis-empty-banner">
+        <div class="analysis-empty-icon">📊</div>
+        <h3>Nenhuma tarefa selecionada para a análise ainda</h3>
+        <p>
+          Para que você tenha controle total e analise apenas o que importa, cada tarefa possui um campo que define se ela deve ou não participar da análise de pendências.
+        </p>
+        <button type="button" class="btn btn-primary" onclick="toggleAnalysisConfig()">
+          ⚙️ Escolher Tarefas que Participam da Análise
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Filtragem
+  let filtered = monitoredTasks.filter(task => {
+    // Filtro por Categoria
+    if (analysisCategoryFilter !== 'all') {
+      const cat = (task.category || 'Geral').toLowerCase();
+      if (cat !== analysisCategoryFilter.toLowerCase()) return false;
+    }
+
+    // Filtro por Severidade
+    if (analysisSeverityFilter !== 'all') {
+      const stats = taskStatsMap.get(task.id);
+      if (stats.severity !== analysisSeverityFilter) return false;
+    }
+
+    return true;
+  });
+
+  // Ordenação
+  filtered.sort((a, b) => {
+    const statsA = taskStatsMap.get(a.id);
+    const statsB = taskStatsMap.get(b.id);
+
+    switch (analysisSort) {
+      case 'streak-desc':
+        return statsB.consecutivePendingStreak - statsA.consecutivePendingStreak;
+      case 'time-asc':
+        return statsA.totalTimeSpent - statsB.totalTimeSpent;
+      case 'due-date':
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      case 'title-asc':
+        return a.title.localeCompare(b.title);
+      case 'neglect-desc':
+      default:
+        if (statsB.neglectPercent !== statsA.neglectPercent) {
+          return statsB.neglectPercent - statsA.neglectPercent;
+        }
+        return statsB.consecutivePendingStreak - statsA.consecutivePendingStreak;
+    }
+  });
+
+  if (filtered.length === 0) {
+    analysisCardsContainer.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <h3>Nenhuma tarefa encontrada com os filtros selecionados</h3>
+        <p>Ajuste os filtros de categoria ou status acima para ver mais tarefas.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Renderizar cards de tarefas analisadas
+  analysisCardsContainer.innerHTML = filtered.map(task => {
+    const stats = taskStatsMap.get(task.id);
+    const priorityKey = task.priority || 'media';
+    const subtasks = task.subtasks || [];
+    const totalSub = subtasks.length;
+    const completedSub = subtasks.filter(st => st.completed).length;
+
+    let severityLabel = '';
+    if (stats.severity === 'critical') {
+      severityLabel = `🔴 Crítica • ${stats.statusMessage}`;
+    } else if (stats.severity === 'warning') {
+      severityLabel = `🟡 Atenção • ${stats.statusMessage}`;
+    } else {
+      severityLabel = `🟢 Em dia • ${stats.statusMessage}`;
+    }
+
+    const donePercent = Math.max(0, 100 - stats.neglectPercent);
+    const pendingPercent = stats.neglectPercent;
+
+    return `
+      <div class="analysis-task-card severity-${stats.severity}" id="analysis-card-${task.id}">
+        <!-- Topo: Título, Metas e Grau de Alerta -->
+        <div class="analysis-card-top">
+          <div class="analysis-card-title-group">
+            <div class="analysis-card-title">
+              <span>${escapeHtml(task.title)}</span>
+            </div>
+            <div class="analysis-card-meta">
+              ${formatCategoryBadge(task.category)}
+              <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
+              ${formatRecurrenceBadge(task.recurrence || 'diaria')}
+              ${formatDueDateBadge(task.dueDate, task.completed)}
+              ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
+            </div>
+          </div>
+          <span class="analysis-severity-pill ${stats.severity}">
+            ${severityLabel}
+          </span>
+        </div>
+
+        <!-- Linha de Estatísticas de Negligência -->
+        <div class="analysis-stats-row">
+          <div class="analysis-stat-box">
+            <span class="analysis-stat-box-label">Sequência sem concluir</span>
+            <span class="analysis-stat-box-val ${stats.consecutivePendingStreak >= 3 ? 'highlight-danger' : (stats.consecutivePendingStreak >= 1 ? 'highlight-warning' : 'highlight-success')}">
+              ${stats.consecutivePendingStreak === 0 ? 'Concluída hoje' : `${stats.consecutivePendingStreak} ${stats.consecutivePendingStreak === 1 ? 'dia' : 'dias seguidos'}`}
+            </span>
+          </div>
+          <div class="analysis-stat-box">
+            <span class="analysis-stat-box-label">Frequência Registrada</span>
+            <span class="analysis-stat-box-val">
+              ${stats.pendingDaysCount} de ${stats.daysRecordedCount} dias pendente (${stats.neglectPercent}%)
+            </span>
+          </div>
+          <div class="analysis-stat-box">
+            <span class="analysis-stat-box-label">Tempo Dedicado</span>
+            <span class="analysis-stat-box-val">
+              Total: ${formatReadableTime(stats.totalTimeSpent)}
+            </span>
+          </div>
+          <div class="analysis-stat-box">
+            <span class="analysis-stat-box-label">Última Conclusão</span>
+            <span class="analysis-stat-box-val">
+              ${stats.lastCompletedDisplay}
+            </span>
+          </div>
+        </div>
+
+        <!-- Barra de Progresso de Frequência -->
+        <div class="analysis-progress-wrapper">
+          <div class="analysis-progress-labels">
+            <span>Frequência no Histórico</span>
+            <span>✅ Concluída em ${stats.completedDaysCount} dias (${donePercent}%) • ❌ Pendente em ${stats.pendingDaysCount} dias (${pendingPercent}%)</span>
+          </div>
+          <div class="analysis-progress-bar-bg" title="Verde: Dias cumprida | Vermelho: Dias deixada de lado">
+            <div class="analysis-progress-bar-done" style="width: ${donePercent}%;"></div>
+            <div class="analysis-progress-bar-pending" style="width: ${pendingPercent}%;"></div>
+          </div>
+        </div>
+
+        <!-- Rodapé do Card: Ações Rápidas -->
+        <div class="analysis-card-footer">
+          <div class="analysis-card-actions-left">
+            <button type="button" class="btn-action-focus" onclick="focusTaskFromAnalysis('${task.id}')" title="Ir para a rotina de Hoje e focar nesta tarefa">
+              ▶ Focar Nesta Tarefa Agora
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openLogTimeModal('${task.id}', event)" title="Registrar tempo dedicado manualmente">
+              ⏱️ + Tempo
+            </button>
+            <button type="button" class="btn ${task.completed ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="toggleCompleteFromAnalysis('${task.id}')">
+              ${task.completed ? '↺ Desmarcar Conclusão' : '✅ Concluir Hoje'}
+            </button>
+          </div>
+          <button type="button" class="btn-action-remove-analysis" onclick="toggleTaskAnalysis('${task.id}', event)" title="Excluir esta tarefa da análise">
+            ✕ Remover da Análise
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleTaskAnalysis(taskId, event) {
+  if (event) event.stopPropagation();
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  task.includeInAnalysis = !task.includeInAnalysis;
+  saveTasks();
+  render();
+  if (activeTab === 'analysis') {
+    renderAnalysis();
+    updateDateDisplay();
+  }
+  dbUpsertTask(task);
+}
+
+function selectAllTasksForAnalysis(include) {
+  tasks.forEach(t => {
+    t.includeInAnalysis = include;
+  });
+  saveTasks();
+  render();
+  renderAnalysis();
+  updateDateDisplay();
+  dbSyncAllTasks();
+}
+
+function toggleAnalysisConfig() {
+  if (!analysisConfigPanel) return;
+  const isHidden = analysisConfigPanel.classList.contains('hidden');
+  if (isHidden) {
+    analysisConfigPanel.classList.remove('hidden');
+    if (btnToggleAnalysisConfigText) btnToggleAnalysisConfigText.textContent = 'Fechar Configuração';
+  } else {
+    analysisConfigPanel.classList.add('hidden');
+    if (btnToggleAnalysisConfigText) btnToggleAnalysisConfigText.textContent = 'Gerenciar Monitoramento';
+  }
+}
+
+function focusTaskFromAnalysis(taskId) {
+  if (tabToday) {
+    tabToday.click();
+  }
+  setTimeout(() => {
+    highlightAndScrollToTask(taskId);
+  }, 100);
+}
+
+function toggleCompleteFromAnalysis(taskId) {
+  toggleTaskCompletion(taskId);
+  renderAnalysis();
+}
+
+window.calculateTaskNeglect = calculateTaskNeglect;
+window.updateAnalysisMetrics = updateAnalysisMetrics;
+window.renderAnalysis = renderAnalysis;
+window.toggleTaskAnalysis = toggleTaskAnalysis;
+window.selectAllTasksForAnalysis = selectAllTasksForAnalysis;
+window.toggleAnalysisConfig = toggleAnalysisConfig;
+window.focusTaskFromAnalysis = focusTaskFromAnalysis;
+window.toggleCompleteFromAnalysis = toggleCompleteFromAnalysis;
+
 // Utilitários
 function escapeHtml(text) {
   if (!text) return '';
@@ -2935,6 +3515,7 @@ function mapDbTaskToModel(row) {
     priority: row.priority || 'media',
     recurrence: row.recurrence || 'diaria',
     dueDate: row.due_date || null,
+    includeInAnalysis: row.include_in_analysis !== undefined ? !!row.include_in_analysis : false,
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
@@ -2960,6 +3541,7 @@ function mapModelToDbTask(task) {
     priority: task.priority || 'media',
     recurrence: task.recurrence || 'diaria',
     due_date: task.dueDate || null,
+    include_in_analysis: !!task.includeInAnalysis,
     description: task.description || '',
     completed: !!task.completed,
     created_at: task.createdAt || Date.now(),
@@ -2989,11 +3571,12 @@ async function fetchFromSupabase() {
         // Banco no Supabase está vazio: envia as tarefas da rotina atual
         const rows = tasks.map(mapModelToDbTask);
         const { error: upsertErr } = await supabaseClient.from('tasks').upsert(rows);
-        if (upsertErr && (upsertErr.code === '42703' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date'))))) {
+        if (upsertErr && (upsertErr.code === '42703' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date') || upsertErr.message.includes('include_in_analysis'))))) {
           const fallbackRows = rows.map(r => {
             const copy = { ...r };
             delete copy.recurrence;
             delete copy.due_date;
+            delete copy.include_in_analysis;
             return copy;
           });
           await supabaseClient.from('tasks').upsert(fallbackRows);
@@ -3204,11 +3787,12 @@ async function dbUpsertTask(task) {
     const row = mapModelToDbTask(task);
     const { error } = await supabaseClient.from('tasks').upsert(row);
     if (error) {
-      if (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date')))) {
-        // Fallback caso a tabela ainda não tenha as colunas recurrence ou due_date criadas
+      if (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis')))) {
+        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date ou include_in_analysis criadas
         const fallbackRow = { ...row };
         delete fallbackRow.recurrence;
         delete fallbackRow.due_date;
+        delete fallbackRow.include_in_analysis;
         await supabaseClient.from('tasks').upsert(fallbackRow);
       } else {
         console.warn('Aviso ao sincronizar tarefa com Supabase:', error.message);
@@ -3244,11 +3828,12 @@ async function dbSyncAllTasks() {
     updateSyncStatus('syncing', 'Sincronizando...');
     const rows = tasks.map(mapModelToDbTask);
     const { error } = await supabaseClient.from('tasks').upsert(rows);
-    if (error && (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date'))))) {
+    if (error && (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis'))))) {
       const fallbackRows = rows.map(r => {
         const copy = { ...r };
         delete copy.recurrence;
         delete copy.due_date;
+        delete copy.include_in_analysis;
         return copy;
       });
       await supabaseClient.from('tasks').upsert(fallbackRows);

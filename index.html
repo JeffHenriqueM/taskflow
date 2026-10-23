@@ -63,6 +63,10 @@
             <span>📜 Histórico dos Dias</span>
             <span id="historyBadge" class="badge-count">0</span>
           </button>
+          <button type="button" id="tabAnalysis" class="switch-btn">
+            <span>📊 Análise</span>
+            <span id="analysisBadge" class="badge-count hidden">0</span>
+          </button>
         </div>
         <button type="button" id="btnCompleteDay" class="btn btn-finish-day" title="Arquiva o relatório do dia no Histórico e prepara a rotina para o próximo dia">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -193,6 +197,16 @@
               </div>
             </div>
 
+            <div class="form-group form-checkbox-group">
+              <label class="checkbox-label" for="taskIncludeInAnalysis">
+                <input type="checkbox" id="taskIncludeInAnalysis" class="custom-checkbox">
+                <div class="checkbox-text">
+                  <span class="checkbox-title">📊 Participar da Análise de Tarefas Deixadas de Lado</span>
+                  <span class="checkbox-subtitle">Monitore a frequência de execução para alertar se esta tarefa estiver sendo negligenciada.</span>
+                </div>
+              </label>
+            </div>
+
             <div class="form-group">
               <label for="taskDescription">Descrição / Notas (Opcional)</label>
               <textarea id="taskDescription" rows="2" placeholder="Observações, escopo ou links..."></textarea>
@@ -280,6 +294,85 @@
 
         <div id="historyListContainer" class="history-list-container">
           <!-- Cards de cada dia gerados via JS -->
+        </div>
+      </section>
+
+      <!-- Analysis View (Neglected Tasks Analysis) -->
+      <section id="analysisView" class="analysis-view hidden">
+        <div class="analysis-header">
+          <div class="analysis-header-info">
+            <span class="analysis-header-icon">📊</span>
+            <div>
+              <h2>Análise de Tarefas Deixadas de Lado</h2>
+              <p class="subtitle">Acompanhe tarefas que estão acumulando dias sem execução e identifique onde focar primeiro</p>
+            </div>
+          </div>
+          <div class="analysis-header-actions">
+            <button type="button" id="btnToggleAnalysisConfig" class="btn btn-secondary btn-sm" title="Gerenciar quais tarefas devem ser incluídas nesta análise">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span id="btnToggleAnalysisConfigText">Gerenciar Monitoramento</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Selector Drawer -->
+        <div id="analysisConfigPanel" class="analysis-config-panel hidden">
+          <div class="config-panel-header">
+            <h3>⚙️ Escolha quais tarefas participam desta análise</h3>
+            <p class="config-panel-desc">Marque as tarefas que você deseja acompanhar de perto. Tarefas desmarcadas não influenciam os gráficos nem os alertas.</p>
+          </div>
+          <div class="config-panel-quick-actions">
+            <button type="button" class="btn-text-action" onclick="selectAllTasksForAnalysis(true)">Marcar Todas</button>
+            <span>•</span>
+            <button type="button" class="btn-text-action" onclick="selectAllTasksForAnalysis(false)">Desmarcar Todas</button>
+          </div>
+          <div id="analysisTasksCheckboxList" class="analysis-checkbox-grid">
+            <!-- Gerado dinamicamente com checkbox para cada tarefa -->
+          </div>
+        </div>
+
+        <!-- Analysis KPI Cards -->
+        <div class="analysis-kpi-grid" id="analysisKpiGrid">
+          <!-- Renderizado via JS -->
+        </div>
+
+        <!-- Toolbar / Filters -->
+        <div class="analysis-toolbar" id="analysisToolbar">
+          <div class="analysis-filters-group">
+            <label for="analysisCategorySelect">Categoria:</label>
+            <select id="analysisCategorySelect">
+              <option value="all">Todas as Categorias</option>
+              <option value="Villamor">🏢 Villamor</option>
+              <option value="ArtsIvo">🎨 ArtsIvo</option>
+              <option value="Pessoal">👤 Pessoal</option>
+              <option value="Empreendedorismo">🚀 Empreendedorismo</option>
+              <option value="Geral">📁 Geral</option>
+            </select>
+          </div>
+          <div class="analysis-filters-group">
+            <label for="analysisSeveritySelect">Status:</label>
+            <select id="analysisSeveritySelect">
+              <option value="all">Todos os Status</option>
+              <option value="critical">🔴 Críticas (Mais deixadas de lado)</option>
+              <option value="warning">🟡 Em Atenção</option>
+              <option value="good">🟢 Em Dia / Realizadas</option>
+            </select>
+          </div>
+          <div class="analysis-filters-group">
+            <label for="analysisSortSelect">Ordenar por:</label>
+            <select id="analysisSortSelect">
+              <option value="neglect-desc">Mais deixadas de lado primeiro</option>
+              <option value="streak-desc">Maior sequência sem concluir</option>
+              <option value="time-asc">Menor tempo dedicado</option>
+              <option value="due-date">Prazo mais urgente</option>
+              <option value="title-asc">Ordem alfabética (A-Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- List of Analyzed Tasks -->
+        <div id="analysisCardsContainer" class="analysis-cards-container">
+          <!-- Renderizado dinamicamente -->
         </div>
       </section>
     </main>
@@ -517,6 +610,16 @@
         <div class="form-group">
           <label for="editTaskDescription">Descrição / Notas</label>
           <textarea id="editTaskDescription" rows="2" placeholder="Observações, escopo ou links..."></textarea>
+        </div>
+
+        <div class="form-group form-checkbox-group">
+          <label class="checkbox-label" for="editTaskIncludeInAnalysis">
+            <input type="checkbox" id="editTaskIncludeInAnalysis" class="custom-checkbox">
+            <div class="checkbox-text">
+              <span class="checkbox-title">📊 Participar da Análise de Tarefas Deixadas de Lado</span>
+              <span class="checkbox-subtitle">Monitore a frequência de execução para alertar se esta tarefa estiver sendo negligenciada.</span>
+            </div>
+          </label>
         </div>
 
         <!-- Subtarefas no Modal de Edição -->
