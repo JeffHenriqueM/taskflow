@@ -445,7 +445,7 @@ function updateDateDisplay() {
         : `${count} dias arquivados para consulta`;
     }
   } else if (activeTab === 'analysis') {
-    if (currentDayTitle) currentDayTitle.textContent = '📊 Análise de Tarefas Deixadas de Lado';
+    if (currentDayTitle) currentDayTitle.textContent = '📊 Análise de Tarefas';
     if (currentDaySubtitle) {
       const monitored = tasks.filter(t => !!t.includeInAnalysis);
       currentDaySubtitle.textContent = `${monitored.length} de ${tasks.length} tarefas selecionadas para monitoramento`;
@@ -2585,7 +2585,7 @@ function renderTasks() {
                   <span 
                     class="badge badge-analysis-active clickable" 
                     onclick="toggleTaskAnalysis('${task.id}', event)" 
-                    title="Esta tarefa participa da análise de tarefas deixadas de lado (clique para remover da análise)"
+                    title="Esta tarefa participa da análise de tarefas (clique para remover da análise)"
                   >
                     📊 Na Análise
                   </span>
@@ -3200,9 +3200,9 @@ function renderAnalysis() {
     analysisCardsContainer.innerHTML = `
       <div class="analysis-empty-banner">
         <div class="analysis-empty-icon">📊</div>
-        <h3>Nenhuma tarefa selecionada para a análise ainda</h3>
+        <h3>Nenhuma tarefa selecionada para a análise de tarefas ainda</h3>
         <p>
-          Para que você tenha controle total e analise apenas o que importa, cada tarefa possui um campo que define se ela deve ou não participar da análise de pendências.
+          Para que você tenha controle total e analise apenas o que importa, cada tarefa possui um campo que define se ela deve ou não participar da análise de tarefas.
         </p>
         <button type="button" class="btn btn-primary" onclick="toggleAnalysisConfig()">
           ⚙️ Escolher Tarefas que Participam da Análise
@@ -3235,6 +3235,8 @@ function renderAnalysis() {
     const statsB = taskStatsMap.get(b.id);
 
     switch (analysisSort) {
+      case 'time-desc':
+        return statsB.totalTimeSpent - statsA.totalTimeSpent;
       case 'streak-desc':
         return statsB.consecutivePendingStreak - statsA.consecutivePendingStreak;
       case 'time-asc':
