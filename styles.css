@@ -796,6 +796,21 @@ textarea {
   opacity: 0.75;
 }
 
+.task-card.collapsed {
+  padding-bottom: 14px;
+}
+
+.task-card.collapsed .subtasks-progress-wrapper {
+  display: none !important;
+}
+
+.task-card.collapsed .task-description {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 580px;
+}
+
 .task-card-header {
   display: flex;
   justify-content: space-between;
@@ -1010,6 +1025,98 @@ textarea {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   gap: 10px;
+  transition: transform 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  user-select: none;
+}
+
+.subtask-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  cursor: -webkit-grab;
+  color: var(--text-dim);
+  padding: 3px 2px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.subtask-drag-handle:hover {
+  color: var(--primary);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.subtask-drag-handle:active {
+  cursor: grabbing;
+  cursor: -webkit-grabbing;
+}
+
+.subtask-item.is-dragging {
+  opacity: 0.35;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--primary);
+  transform: scale(0.99);
+}
+
+.subtask-item.drag-over-top {
+  border-top: 2px solid var(--primary);
+  box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.subtask-item.drag-over-bottom {
+  border-bottom: 2px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-toggle-collapse {
+  color: var(--text-dim);
+  transition: all 0.2s ease;
+  padding: 4px;
+}
+
+.btn-toggle-collapse:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.collapse-chevron {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapse-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.subtasks-count-badge {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.subtasks-count-badge:hover {
+  background: rgba(148, 163, 184, 0.25) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.btn-toolbar-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-toolbar-collapse:hover {
+  transform: translateY(-1px);
 }
 
 .subtask-item-left {

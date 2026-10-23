@@ -184,6 +184,9 @@ let searchQuery = '';
 let analysisCategoryFilter = 'all';
 let analysisSeverityFilter = 'all';
 let analysisSort = 'neglect-desc';
+let collapsedTaskIds = new Set();
+let draggedSubtaskInfo = null;
+let touchDragInfo = null;
 
 // Elementos DOM
 const currentDayTitle = document.getElementById('currentDayTitle');
@@ -465,6 +468,16 @@ function loadData() {
     dailyHistory = rawHist ? JSON.parse(rawHist) : {};
   } catch (e) {
     dailyHistory = {};
+  }
+
+  // Carrega estado de tarefas recolhidas (collapsed)
+  try {
+    const rawCollapsed = localStorage.getItem('taskflow_collapsed_tasks');
+    if (rawCollapsed) {
+      collapsedTaskIds = new Set(JSON.parse(rawCollapsed));
+    }
+  } catch (e) {
+    collapsedTaskIds = new Set();
   }
 
   // 2. Carrega tarefas da rotina
@@ -2117,6 +2130,8 @@ function addInlineSubtask(taskId) {
     });
     textInput.value = '';
     if (dateInput) dateInput.value = '';
+    collapsedTaskIds.delete(taskId);
+    saveCollapsedState();
     saveTasks();
     render();
     dbUpsertTask(task);
@@ -2130,6 +2145,250 @@ function removeSubtaskFromTask(taskId, subtaskId) {
     saveTasks();
     render();
     dbUpsertTask(task);
+  }
+}
+
+// ==========================================
+// Reordenação de Subtarefas (Drag and Drop & Touch)
+// ==========================================
+
+function handleSubtaskDragStart(e, taskId, subtaskId, index) {
+  if (e.target.closest('input, select, button, .btn-edit-subtask, .btn-remove-subtask')) {
+    e.preventDefault();
+    return;
+  }
+  
+  draggedSubtaskInfo = { taskId, subtaskId, index };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', subtaskId);
+  
+  setTimeout(() => {
+    const el = document.getElementById(`subtask-${taskId}-${subtaskId}`);
+    if (el) el.classList.add('is-dragging');
+  }, 0);
+}
+
+function handleSubtaskDragOver(e, taskId, subtaskId, index) {
+  if (!draggedSubtaskInfo || draggedSubtaskInfo.taskId !== taskId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+
+  const targetEl = e.currentTarget;
+  if (!targetEl || draggedSubtaskInfo.subtaskId === subtaskId) return;
+
+  const rect = targetEl.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+
+  if (e.clientY < midY) {
+    targetEl.classList.add('drag-over-top');
+    targetEl.classList.remove('drag-over-bottom');
+  } else {
+    targetEl.classList.add('drag-over-bottom');
+    targetEl.classList.remove('drag-over-top');
+  }
+}
+
+function handleSubtaskDragEnter(e) {
+  if (e.currentTarget) e.preventDefault();
+}
+
+function handleSubtaskDragLeave(e) {
+  const targetEl = e.currentTarget;
+  if (targetEl) {
+    targetEl.classList.remove('drag-over-top', 'drag-over-bottom');
+  }
+}
+
+function handleSubtaskDrop(e, targetTaskId, targetSubtaskId, targetIndex) {
+  e.preventDefault();
+  const targetEl = e.currentTarget;
+  const isDropTop = targetEl && targetEl.classList.contains('drag-over-top');
+  
+  clearAllSubtaskDragClasses();
+
+  if (!draggedSubtaskInfo || draggedSubtaskInfo.taskId !== targetTaskId) return;
+  if (draggedSubtaskInfo.subtaskId === targetSubtaskId) return;
+
+  const task = tasks.find(t => t.id === targetTaskId);
+  if (!task || !task.subtasks) return;
+
+  const fromIndex = task.subtasks.findIndex(s => s.id === draggedSubtaskInfo.subtaskId);
+  if (fromIndex === -1) return;
+
+  const [movedSubtask] = task.subtasks.splice(fromIndex, 1);
+  const newTargetIndex = task.subtasks.findIndex(s => s.id === targetSubtaskId);
+  if (newTargetIndex === -1) {
+    task.subtasks.push(movedSubtask);
+  } else {
+    const insertIndex = isDropTop ? newTargetIndex : newTargetIndex + 1;
+    task.subtasks.splice(insertIndex, 0, movedSubtask);
+  }
+
+  saveTasks();
+  renderTasks();
+  dbUpsertTask(task);
+}
+
+function handleSubtaskDragEnd(e) {
+  clearAllSubtaskDragClasses();
+  draggedSubtaskInfo = null;
+}
+
+function clearAllSubtaskDragClasses() {
+  document.querySelectorAll('.subtask-item').forEach(el => {
+    el.classList.remove('is-dragging', 'drag-over-top', 'drag-over-bottom');
+  });
+}
+
+function handleTouchDragStart(e, taskId, subtaskId, index) {
+  const touch = e.touches[0];
+  const itemEl = document.getElementById(`subtask-${taskId}-${subtaskId}`);
+  if (!itemEl) return;
+
+  touchDragInfo = {
+    taskId,
+    subtaskId,
+    index,
+    sourceEl: itemEl,
+    startY: touch.clientY,
+    currentHoverEl: null
+  };
+
+  itemEl.classList.add('is-dragging');
+}
+
+function handleTouchDragMove(e) {
+  if (!touchDragInfo) return;
+  e.preventDefault();
+
+  const touch = e.touches[0];
+  const targetFromPoint = document.elementFromPoint(touch.clientX, touch.clientY);
+  const targetSubtaskEl = targetFromPoint ? targetFromPoint.closest('.subtask-item') : null;
+
+  document.querySelectorAll('.subtask-item').forEach(el => {
+    if (el !== targetSubtaskEl) {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    }
+  });
+
+  if (targetSubtaskEl && targetSubtaskEl !== touchDragInfo.sourceEl && targetSubtaskEl.dataset.taskId === touchDragInfo.taskId) {
+    touchDragInfo.currentHoverEl = targetSubtaskEl;
+    const rect = targetSubtaskEl.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+
+    if (touch.clientY < midY) {
+      targetSubtaskEl.classList.add('drag-over-top');
+      targetSubtaskEl.classList.remove('drag-over-bottom');
+    } else {
+      targetSubtaskEl.classList.add('drag-over-bottom');
+      targetSubtaskEl.classList.remove('drag-over-top');
+    }
+  } else {
+    touchDragInfo.currentHoverEl = null;
+  }
+}
+
+function handleTouchDragEnd(e) {
+  if (!touchDragInfo) return;
+
+  const targetEl = touchDragInfo.currentHoverEl;
+  const sourceEl = touchDragInfo.sourceEl;
+
+  if (targetEl && targetEl !== sourceEl) {
+    const targetTaskId = targetEl.dataset.taskId;
+    const targetSubtaskId = targetEl.dataset.subtaskId;
+    const isDropTop = targetEl.classList.contains('drag-over-top');
+
+    const task = tasks.find(t => t.id === targetTaskId);
+    if (task && task.subtasks) {
+      const fromIndex = task.subtasks.findIndex(s => s.id === touchDragInfo.subtaskId);
+      if (fromIndex !== -1) {
+        const [movedSubtask] = task.subtasks.splice(fromIndex, 1);
+        const newTargetIndex = task.subtasks.findIndex(s => s.id === targetSubtaskId);
+        if (newTargetIndex === -1) {
+          task.subtasks.push(movedSubtask);
+        } else {
+          const insertIndex = isDropTop ? newTargetIndex : newTargetIndex + 1;
+          task.subtasks.splice(insertIndex, 0, movedSubtask);
+        }
+        saveTasks();
+        renderTasks();
+        dbUpsertTask(task);
+      }
+    }
+  }
+
+  clearAllSubtaskDragClasses();
+  touchDragInfo = null;
+}
+
+// ==========================================
+// Recolher e Expandir Tarefas (Clean View)
+// ==========================================
+
+function saveCollapsedState() {
+  try {
+    localStorage.setItem('taskflow_collapsed_tasks', JSON.stringify([...collapsedTaskIds]));
+  } catch (e) {
+    console.error('Erro ao salvar tarefas colapsadas:', e);
+  }
+}
+
+function toggleTaskCollapse(taskId, event) {
+  if (event) event.stopPropagation();
+  if (collapsedTaskIds.has(taskId)) {
+    collapsedTaskIds.delete(taskId);
+  } else {
+    collapsedTaskIds.add(taskId);
+  }
+  saveCollapsedState();
+
+  const card = document.getElementById(`task-card-${taskId}`);
+  if (card) {
+    const isNowCollapsed = collapsedTaskIds.has(taskId);
+    card.classList.toggle('collapsed', isNowCollapsed);
+
+    const chevron = card.querySelector('.collapse-chevron');
+    if (chevron) {
+      chevron.classList.toggle('rotated', isNowCollapsed);
+    }
+    const badge = card.querySelector('.subtasks-count-badge');
+    if (badge) {
+      badge.title = isNowCollapsed ? 'Clique para expandir subtarefas' : 'Clique para recolher subtarefas';
+      const text = badge.textContent.replace(/[▾▴]/g, '').trim();
+      badge.textContent = `${text} ${isNowCollapsed ? '▾' : '▴'}`;
+    }
+  }
+  updateToggleAllButton();
+}
+
+function toggleAllTasksCollapse() {
+  const allCurrentlyCollapsed = tasks.length > 0 && tasks.every(t => collapsedTaskIds.has(t.id));
+  if (allCurrentlyCollapsed) {
+    collapsedTaskIds.clear();
+  } else {
+    tasks.forEach(t => collapsedTaskIds.add(t.id));
+  }
+  saveCollapsedState();
+  renderTasks();
+  updateToggleAllButton();
+}
+
+function updateToggleAllButton() {
+  const btn = document.getElementById('btnToggleAllTasks');
+  const icon = document.getElementById('btnToggleAllTasksIcon');
+  const text = document.getElementById('btnToggleAllTasksText');
+  if (!btn || !text || tasks.length === 0) return;
+
+  const allCollapsed = tasks.every(t => collapsedTaskIds.has(t.id));
+  if (allCollapsed) {
+    if (icon) icon.textContent = '🔽';
+    text.textContent = 'Expandir Todas';
+    btn.title = 'Expandir todas as tarefas da rotina';
+  } else {
+    if (icon) icon.textContent = '🔼';
+    text.textContent = 'Recolher Todas';
+    btn.title = 'Recolher todas as tarefas para uma listagem mais limpa';
   }
 }
 
@@ -2547,6 +2806,7 @@ function renderTasks() {
     }
 
     const isRunning = task.isRunning;
+    const isCollapsed = collapsedTaskIds.has(task.id);
     const remainingSecs = getTaskRemainingSeconds(task);
     const timeFormatted = formatTimeHMS(remainingSecs);
     const targetMins = Math.round(getTaskTargetSeconds(task) / 60);
@@ -2562,7 +2822,7 @@ function renderTasks() {
 
     return `
       ${sectionDividerHtml}
-      <div class="task-card ${task.completed ? 'completed' : ''} ${isRunning ? 'is-running' : ''}" id="task-card-${task.id}">
+      <div class="task-card ${task.completed ? 'completed' : ''} ${isRunning ? 'is-running' : ''} ${isCollapsed ? 'collapsed' : ''}" id="task-card-${task.id}">
         <!-- Header da Tarefa -->
         <div class="task-card-header">
           <div class="task-main-info">
@@ -2590,7 +2850,16 @@ function renderTasks() {
                     📊 Na Análise
                   </span>
                 ` : ''}
-                ${totalSub > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSub}/${totalSub} subtarefas</span>` : ''}
+                ${totalSub > 0 ? `
+                  <span 
+                    class="badge subtasks-count-badge clickable" 
+                    onclick="toggleTaskCollapse('${task.id}', event)" 
+                    style="background: rgba(148,163,184,0.15); color: #cbd5e1;" 
+                    title="${isCollapsed ? 'Clique para expandir subtarefas' : 'Clique para recolher subtarefas'}"
+                  >
+                    📋 ${completedSub}/${totalSub} subtarefas ${isCollapsed ? '▾' : '▴'}
+                  </span>
+                ` : ''}
                 ${(pomodoroCount > 0 || dedicatedSeconds > 0) ? `
                   <span 
                     class="badge badge-pomodoro clickable" 
@@ -2643,6 +2912,16 @@ function renderTasks() {
               <button class="btn-icon" onclick="deleteTask('${task.id}')" title="Excluir Tarefa">
                 🗑
               </button>
+              <button 
+                type="button" 
+                class="btn-icon btn-toggle-collapse" 
+                onclick="toggleTaskCollapse('${task.id}', event)" 
+                title="${isCollapsed ? 'Expandir subtarefas' : 'Recolher subtarefas'}"
+              >
+                <svg class="collapse-chevron ${isCollapsed ? 'rotated' : ''}" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -2660,14 +2939,41 @@ function renderTasks() {
           ` : ''}
 
           <div class="subtasks-section">
-            ${subtasks.map(st => `
-              <div class="subtask-item ${st.completed ? 'completed' : ''}">
+            ${subtasks.map((st, index) => `
+              <div 
+                class="subtask-item ${st.completed ? 'completed' : ''}" 
+                id="subtask-${task.id}-${st.id}"
+                draggable="true"
+                data-task-id="${task.id}"
+                data-subtask-id="${st.id}"
+                data-index="${index}"
+                ondragstart="handleSubtaskDragStart(event, '${task.id}', '${st.id}', ${index})"
+                ondragover="handleSubtaskDragOver(event, '${task.id}', '${st.id}', ${index})"
+                ondragenter="handleSubtaskDragEnter(event)"
+                ondragleave="handleSubtaskDragLeave(event)"
+                ondrop="handleSubtaskDrop(event, '${task.id}', '${st.id}', ${index})"
+                ondragend="handleSubtaskDragEnd(event)"
+              >
                 <div class="subtask-item-left">
+                  <span 
+                    class="subtask-drag-handle" 
+                    title="Arraste para reordenar esta subtarefa"
+                    ontouchstart="handleTouchDragStart(event, '${task.id}', '${st.id}', ${index})"
+                    ontouchmove="handleTouchDragMove(event)"
+                    ontouchend="handleTouchDragEnd(event)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/>
+                      <circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>
+                      <circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/>
+                    </svg>
+                  </span>
                   <input 
                     type="checkbox" 
                     class="subtask-checkbox" 
                     ${st.completed ? 'checked' : ''} 
                     onchange="toggleSubtask('${task.id}', '${st.id}')"
+                    title="Marcar como concluída"
                   >
                   <span class="subtask-title">${escapeHtml(st.title)}</span>
                   ${formatSubtaskRecurrenceBadge(st.recurrence || getSubtaskRecurrence(st), task.id, st.id)}
@@ -2717,6 +3023,7 @@ function renderTasks() {
       </div>
     `;
   }).join('');
+  updateToggleAllButton();
 }
 
 // Backup & Restauração
@@ -3895,3 +4202,14 @@ window.closeLogTimeModal = closeLogTimeModal;
 window.quickAddLogTime = quickAddLogTime;
 window.updateLogTimePreview = updateLogTimePreview;
 window.handleSaveLogTime = handleSaveLogTime;
+window.toggleTaskCollapse = toggleTaskCollapse;
+window.toggleAllTasksCollapse = toggleAllTasksCollapse;
+window.handleSubtaskDragStart = handleSubtaskDragStart;
+window.handleSubtaskDragOver = handleSubtaskDragOver;
+window.handleSubtaskDragEnter = handleSubtaskDragEnter;
+window.handleSubtaskDragLeave = handleSubtaskDragLeave;
+window.handleSubtaskDrop = handleSubtaskDrop;
+window.handleSubtaskDragEnd = handleSubtaskDragEnd;
+window.handleTouchDragStart = handleTouchDragStart;
+window.handleTouchDragMove = handleTouchDragMove;
+window.handleTouchDragEnd = handleTouchDragEnd;
