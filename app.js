@@ -358,6 +358,8 @@ const modalEditParentTaskIdInput = document.getElementById('modalEditParentTaskI
 const modalEditSubtaskTitleInput = document.getElementById('modalEditSubtaskTitle');
 const modalEditSubtaskRecurrenceSelect = document.getElementById('modalEditSubtaskRecurrence');
 const modalEditSubtaskDueDateInput = document.getElementById('modalEditSubtaskDueDate');
+const modalEditSubtaskPomodorosInput = document.getElementById('modalEditSubtaskPomodoros');
+const modalEditSubtaskElapsedMinutesInput = document.getElementById('modalEditSubtaskElapsedMinutes');
 
 // Modal de Registro Manual de Tempo
 const logTimeModal = document.getElementById('logTimeModal');
@@ -373,6 +375,7 @@ const logTimeForm = document.getElementById('logTimeForm');
 
 let currentConfiguringTaskId = null;
 let currentFinishedTaskId = null;
+let currentFinishedSubtaskId = null;
 let currentRandomChosenTaskId = null;
 let currentLoggingTaskId = null;
 let editTaskTempSubtasks = [];
@@ -520,10 +523,13 @@ function loadData() {
     if (t.blockElapsedSeconds === undefined || (!t.isRunning && t.blockElapsedSeconds >= t.targetSeconds)) {
       t.blockElapsedSeconds = 0;
     }
+    t.activeSubtaskId = t.activeSubtaskId || null;
     if (t.subtasks && Array.isArray(t.subtasks)) {
       t.subtasks.forEach(st => {
         st.dueDate = st.dueDate || null;
         st.recurrence = st.recurrence || getSubtaskRecurrence(st);
+        st.pomodoroCount = st.pomodoroCount !== undefined ? Number(st.pomodoroCount) : 0;
+        st.elapsedSeconds = st.elapsedSeconds !== undefined ? Number(st.elapsedSeconds) : 0;
       });
     }
   });
@@ -646,6 +652,7 @@ function resetTasksForNewDay() {
       pomodoroCount: 0,
       isRunning: false,
       timerStartedAt: null,
+      activeSubtaskId: null,
       // Subtarefas diárias renovam (desmarcam), enquanto únicas e semanais mantêm status
       subtasks: (task.subtasks || []).map(st => {
         const rec = st.recurrence || getSubtaskRecurrence(st);
@@ -653,7 +660,9 @@ function resetTasksForNewDay() {
         return {
           ...st,
           recurrence: rec,
-          completed: isDaily ? false : !!st.completed
+          completed: isDaily ? false : !!st.completed,
+          pomodoroCount: 0,
+          elapsedSeconds: 0
         };
       })
     };
@@ -788,9 +797,14 @@ function setupEventListeners() {
   if (btnFinishedNextBlock) {
     btnFinishedNextBlock.addEventListener('click', () => {
       if (currentFinishedTaskId) {
-        const id = currentFinishedTaskId;
+        const taskId = currentFinishedTaskId;
+        const subtaskId = currentFinishedSubtaskId;
         closeTimerFinishedModal();
-        startTimer(id);
+        if (subtaskId) {
+          startSubtaskTimer(taskId, subtaskId);
+        } else {
+          startTimer(taskId);
+        }
       }
     });
   }
@@ -802,7 +816,11 @@ function setupEventListeners() {
         if (task) {
           task.targetSeconds = (getTaskTargetSeconds(task)) + 300;
           task.blockElapsedSeconds = Math.max(0, task.targetSeconds - 300);
-          startTimer(task.id);
+          if (currentFinishedSubtaskId) {
+            startSubtaskTimer(task.id, currentFinishedSubtaskId);
+          } else {
+            startTimer(task.id);
+          }
         }
       }
       closeTimerFinishedModal();
@@ -812,9 +830,15 @@ function setupEventListeners() {
   if (btnFinishedCompleteTask) {
     btnFinishedCompleteTask.addEventListener('click', () => {
       if (currentFinishedTaskId) {
-        toggleTaskCompletion(currentFinishedTaskId);
+        const taskId = currentFinishedTaskId;
+        const subtaskId = currentFinishedSubtaskId;
+        closeTimerFinishedModal();
+        if (subtaskId) {
+          toggleSubtask(taskId, subtaskId);
+        } else {
+          toggleTaskCompletion(taskId);
+        }
       }
-      closeTimerFinishedModal();
     });
   }
 
@@ -1344,6 +1368,12 @@ function startTimer(taskId) {
       const added = Math.max(0, Math.floor((now - t.timerStartedAt) / 1000));
       t.elapsedSeconds = (t.elapsedSeconds || 0) + added;
       t.blockElapsedSeconds = (t.blockElapsedSeconds || 0) + added;
+      if (t.activeSubtaskId && t.subtasks) {
+        const activeSt = t.subtasks.find(s => s.id === t.activeSubtaskId);
+        if (activeSt) {
+          activeSt.elapsedSeconds = (activeSt.elapsedSeconds || 0) + added;
+        }
+      }
       t.isRunning = false;
       t.timerStartedAt = null;
       dbUpsertTask(t);
@@ -1366,6 +1396,39 @@ function startTimer(taskId) {
   render();
 }
 
+function startSubtaskTimer(taskId, subtaskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.subtasks) return;
+  const subtask = task.subtasks.find(s => s.id === subtaskId);
+  if (!subtask) return;
+
+  // Se já está rodando nesta exata subtarefa, pausa
+  if (task.isRunning && task.activeSubtaskId === subtaskId) {
+    pauseTimer(taskId);
+    return;
+  }
+
+  // Se já está rodando em outra subtarefa ou na raiz, pausa antes para creditar tempo
+  if (task.isRunning) {
+    pauseTimer(taskId);
+  }
+
+  task.activeSubtaskId = subtaskId;
+  startTimer(taskId);
+}
+
+function pauseSubtaskTimer(taskId, subtaskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  pauseTimer(taskId);
+}
+
 function pauseTimer(taskId) {
   const task = tasks.find(t => t.id === taskId);
   if (task && task.isRunning) {
@@ -1373,6 +1436,12 @@ function pauseTimer(taskId) {
     const added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
     task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
     task.blockElapsedSeconds = (task.blockElapsedSeconds || 0) + added;
+    if (task.activeSubtaskId && task.subtasks) {
+      const activeSt = task.subtasks.find(s => s.id === task.activeSubtaskId);
+      if (activeSt) {
+        activeSt.elapsedSeconds = (activeSt.elapsedSeconds || 0) + added;
+      }
+    }
     task.isRunning = false;
     task.timerStartedAt = null;
     saveTasks();
@@ -1930,13 +1999,16 @@ function requestNotificationPermission() {
   }
 }
 
-function sendTimerFinishedNotification(task) {
+function sendTimerFinishedNotification(task, finishedSubtask) {
   playAlarmSound();
 
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
-      new Notification('⏱️ Tempo Esgotado! — TaskFlow', {
-        body: `A contagem regressiva da tarefa "${task.title}" terminou!`,
+      const msg = finishedSubtask 
+        ? `Bloco Pomodoro concluído na subtarefa "${finishedSubtask.title}" (${task.title})!`
+        : `A contagem regressiva da tarefa "${task.title}" terminou!`;
+      new Notification('🍅 Pomodoro Concluído! — TaskFlow', {
+        body: msg,
         icon: 'favicon.svg'
       });
     } catch (e) {
@@ -1944,28 +2016,52 @@ function sendTimerFinishedNotification(task) {
     }
   }
 
-  showTimerFinishedModal(task);
+  showTimerFinishedModal(task, finishedSubtask);
 }
 
-function showTimerFinishedModal(task) {
+function showTimerFinishedModal(task, finishedSubtask) {
   currentFinishedTaskId = task.id;
-  if (finishedTaskName) finishedTaskName.textContent = `"${task.title}"`;
+  currentFinishedSubtaskId = finishedSubtask ? finishedSubtask.id : null;
+
+  if (finishedTaskName) {
+    finishedTaskName.textContent = finishedSubtask 
+      ? `"${task.title}" › "${finishedSubtask.title}"`
+      : `"${task.title}"`;
+  }
+
   if (finishedTaskPomodoroStats) {
     const count = task.pomodoroCount || 1;
     const totalTime = formatReadableTime(task.elapsedSeconds || 0);
-    finishedTaskPomodoroStats.innerHTML = `
-      <div>🍅 <strong>${count}º bloco concluído hoje!</strong></div>
-      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-        Tempo total dedicado a esta tarefa hoje: <strong>${totalTime}</strong>
+
+    const subtaskHtml = finishedSubtask ? `
+      <div style="margin-top: 10px; padding: 10px 12px; background: rgba(59, 130, 246, 0.15); border-radius: var(--radius-sm); border: 1px solid rgba(59, 130, 246, 0.35); text-align: left;">
+        <div style="color: #93c5fd; font-weight: 700; font-size: 13px;">🎯 Subtarefa: ${escapeHtml(finishedSubtask.title)}</div>
+        <div style="font-size: 12px; color: #e0f2fe; margin-top: 4px;">
+          🍅 <strong>${finishedSubtask.pomodoroCount}º bloco concluído nesta subtarefa</strong> (${formatReadableTime(finishedSubtask.elapsedSeconds)})
+        </div>
       </div>
+    ` : '';
+
+    finishedTaskPomodoroStats.innerHTML = `
+      <div>🍅 <strong>${count}º bloco concluído na tarefa!</strong></div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+        Tempo total dedicado à tarefa: <strong>${totalTime}</strong>
+      </div>
+      ${subtaskHtml}
     `;
   }
+
+  if (btnFinishedCompleteTask) {
+    btnFinishedCompleteTask.textContent = finishedSubtask ? '✅ Concluir Subtarefa' : '✅ Concluir Tarefa';
+  }
+
   if (timerFinishedModal) timerFinishedModal.classList.remove('hidden');
 }
 
 function closeTimerFinishedModal() {
   if (timerFinishedModal) timerFinishedModal.classList.add('hidden');
   currentFinishedTaskId = null;
+  currentFinishedSubtaskId = null;
 }
 
 function finishCountdown(task) {
@@ -1983,10 +2079,20 @@ function finishCountdown(task) {
   // Reseta o bloco atual para 0 para que o próximo bloco fique pronto com tempo cheio
   task.blockElapsedSeconds = 0;
 
+  // Credita o Pomodoro e tempo na subtarefa ativa (se houver)
+  let finishedSubtask = null;
+  if (task.activeSubtaskId && task.subtasks) {
+    finishedSubtask = task.subtasks.find(s => s.id === task.activeSubtaskId);
+    if (finishedSubtask) {
+      finishedSubtask.pomodoroCount = (finishedSubtask.pomodoroCount || 0) + 1;
+      finishedSubtask.elapsedSeconds = (finishedSubtask.elapsedSeconds || 0) + added;
+    }
+  }
+
   saveTasks();
   render();
   dbUpsertTask(task);
-  sendTimerFinishedNotification(task);
+  sendTimerFinishedNotification(task, finishedSubtask);
 }
 
 // Formatação de Tempo
@@ -2027,6 +2133,7 @@ function startGlobalTicker() {
     const runningTask = tasks.find(t => t.isRunning);
     if (!runningTask) {
       activeTimerBanner.classList.add('hidden');
+      document.title = 'TaskFlow & Timer — Gerenciador de Tarefas';
       return;
     }
 
@@ -2038,9 +2145,20 @@ function startGlobalTicker() {
       return;
     }
 
-    // Atualiza banner ativo
+    // Atualiza banner ativo e título da aba
     activeTimerBanner.classList.remove('hidden');
-    activeTaskTitle.textContent = runningTask.title;
+    let activeSubtask = null;
+    if (runningTask.activeSubtaskId && runningTask.subtasks) {
+      activeSubtask = runningTask.subtasks.find(s => s.id === runningTask.activeSubtaskId);
+    }
+
+    if (activeSubtask) {
+      activeTaskTitle.innerHTML = `<span style="opacity: 0.8; font-weight: normal;">${escapeHtml(runningTask.title)} ›</span> <strong>${escapeHtml(activeSubtask.title)}</strong>`;
+      document.title = `(${timeFormatted}) ${activeSubtask.title} — TaskFlow`;
+    } else {
+      activeTaskTitle.textContent = runningTask.title;
+      document.title = `(${timeFormatted}) ${runningTask.title} — TaskFlow`;
+    }
     activeTaskTime.textContent = timeFormatted;
 
     // Atualiza o display no card da tarefa sem re-renderizar todo o DOM
@@ -2051,6 +2169,14 @@ function startGlobalTicker() {
         timerDisplayEl.classList.add('warning');
       } else {
         timerDisplayEl.classList.remove('warning');
+      }
+    }
+
+    // Atualiza display ao vivo na subtarefa em execução
+    if (runningTask.activeSubtaskId) {
+      const subtaskTimerEl = document.getElementById(`subtask-timer-${runningTask.activeSubtaskId}`);
+      if (subtaskTimerEl) {
+        subtaskTimerEl.textContent = `⏱️ ${timeFormatted}`;
       }
     }
 
@@ -2627,6 +2753,8 @@ function openEditSubtaskModal(taskId, subtaskId) {
   if (modalEditSubtaskTitleInput) modalEditSubtaskTitleInput.value = subtask.title || '';
   if (modalEditSubtaskRecurrenceSelect) modalEditSubtaskRecurrenceSelect.value = subtask.recurrence || getSubtaskRecurrence(subtask);
   if (modalEditSubtaskDueDateInput) modalEditSubtaskDueDateInput.value = subtask.dueDate || '';
+  if (modalEditSubtaskPomodorosInput) modalEditSubtaskPomodorosInput.value = subtask.pomodoroCount || 0;
+  if (modalEditSubtaskElapsedMinutesInput) modalEditSubtaskElapsedMinutesInput.value = Math.round((subtask.elapsedSeconds || 0) / 60);
 
   if (editSubtaskModal) editSubtaskModal.classList.remove('hidden');
 }
@@ -2652,6 +2780,13 @@ function handleSaveEditSubtask(e) {
     subtask.recurrence = modalEditSubtaskRecurrenceSelect.value;
   }
   subtask.dueDate = modalEditSubtaskDueDateInput.value || null;
+  if (modalEditSubtaskPomodorosInput) {
+    subtask.pomodoroCount = Math.max(0, parseInt(modalEditSubtaskPomodorosInput.value, 10) || 0);
+  }
+  if (modalEditSubtaskElapsedMinutesInput) {
+    const mins = Math.max(0, parseInt(modalEditSubtaskElapsedMinutesInput.value, 10) || 0);
+    subtask.elapsedSeconds = mins * 60;
+  }
 
   saveTasks();
   render();
@@ -3041,9 +3176,14 @@ function renderTasks() {
           ` : ''}
 
           <div class="subtasks-section">
-            ${subtasks.map((st, index) => `
+            ${subtasks.map((st, index) => {
+              const isSubtaskTiming = isRunning && task.activeSubtaskId === st.id;
+              const subtaskPomodoros = st.pomodoroCount || 0;
+              const subtaskElapsed = st.elapsedSeconds || 0;
+
+              return `
               <div 
-                class="subtask-item ${st.completed ? 'completed' : ''}" 
+                class="subtask-item ${st.completed ? 'completed' : ''} ${isSubtaskTiming ? 'is-timing' : ''}" 
                 id="subtask-${task.id}-${st.id}"
                 draggable="true"
                 data-task-id="${task.id}"
@@ -3070,6 +3210,16 @@ function renderTasks() {
                       <circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/>
                     </svg>
                   </span>
+                  
+                  <button 
+                    type="button" 
+                    class="btn-subtask-timer ${isSubtaskTiming ? 'running' : ''}" 
+                    onclick="startSubtaskTimer('${task.id}', '${st.id}', event)" 
+                    title="${isSubtaskTiming ? 'Pausar Pomodoro nesta subtarefa' : 'Iniciar Pomodoro focado nesta subtarefa'}"
+                  >
+                    ${isSubtaskTiming ? '⏸' : '▶'}
+                  </button>
+
                   <input 
                     type="checkbox" 
                     class="subtask-checkbox" 
@@ -3078,6 +3228,16 @@ function renderTasks() {
                     title="Marcar como concluída"
                   >
                   <span class="subtask-title">${escapeHtml(st.title)}</span>
+                  ${isSubtaskTiming ? `<span class="subtask-live-timer" id="subtask-timer-${st.id}">⏱️ ${timeFormatted}</span>` : ''}
+                  ${(subtaskPomodoros > 0 || subtaskElapsed > 0) ? `
+                    <span 
+                      class="badge badge-subtask-pomodoro clickable" 
+                      onclick="openEditSubtaskModal('${task.id}', '${st.id}')" 
+                      title="${subtaskPomodoros} bloco(s) Pomodoro nesta subtarefa • Total: ${formatReadableTime(subtaskElapsed)} (Clique para editar)"
+                    >
+                      🍅 ${subtaskPomodoros > 0 ? `${subtaskPomodoros} • ` : ''}${formatReadableTime(subtaskElapsed)}
+                    </span>
+                  ` : ''}
                   ${formatSubtaskRecurrenceBadge(st.recurrence || getSubtaskRecurrence(st), task.id, st.id)}
                   ${formatSubtaskDueDateBadge(st.dueDate, st.completed)}
                 </div>
@@ -3090,7 +3250,8 @@ function renderTasks() {
                   </button>
                 </div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
 
             <!-- Formulário para adicionar subtarefa inline -->
             <div class="add-subtask-form">
@@ -4330,3 +4491,5 @@ window.startInlineWorkLocationEdit = startInlineWorkLocationEdit;
 window.saveInlineWorkLocation = saveInlineWorkLocation;
 window.cancelInlineWorkLocation = cancelInlineWorkLocation;
 window.clearWorkLocation = clearWorkLocation;
+window.startSubtaskTimer = startSubtaskTimer;
+window.pauseSubtaskTimer = pauseSubtaskTimer;
