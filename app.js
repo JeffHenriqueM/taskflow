@@ -187,6 +187,7 @@ let analysisSort = 'neglect-desc';
 let collapsedTaskIds = new Set();
 let draggedSubtaskInfo = null;
 let touchDragInfo = null;
+let editingWorkLocationTaskId = null;
 
 // Elementos DOM
 const currentDayTitle = document.getElementById('currentDayTitle');
@@ -235,6 +236,7 @@ const taskDueDateInput = document.getElementById('taskDueDate');
 const taskTimerMinutesInput = document.getElementById('taskTimerMinutes');
 const taskIncludeInAnalysisCheckbox = document.getElementById('taskIncludeInAnalysis');
 const taskDescriptionInput = document.getElementById('taskDescription');
+const taskWorkLocationInput = document.getElementById('taskWorkLocation');
 const initialSubtaskInput = document.getElementById('initialSubtaskInput');
 const initialSubtaskRecurrenceSelect = document.getElementById('initialSubtaskRecurrence');
 const initialSubtaskDueDateInput = document.getElementById('initialSubtaskDueDate');
@@ -340,6 +342,7 @@ const editTaskDueDateInput = document.getElementById('editTaskDueDate');
 const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes');
 const editTaskElapsedMinutesInput = document.getElementById('editTaskElapsedMinutes');
 const editTaskDescriptionInput = document.getElementById('editTaskDescription');
+const editTaskWorkLocationInput = document.getElementById('editTaskWorkLocation');
 const editTaskIncludeInAnalysisCheckbox = document.getElementById('editTaskIncludeInAnalysis');
 const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
 const editNewSubtaskRecurrenceSelect = document.getElementById('editNewSubtaskRecurrence');
@@ -499,6 +502,7 @@ function loadData() {
     t.recurrence = t.recurrence || 'diaria';
     t.dueDate = t.dueDate || null;
     t.includeInAnalysis = t.includeInAnalysis !== undefined ? !!t.includeInAnalysis : false;
+    t.workLocation = t.workLocation || '';
     if (t.category) {
       const catLower = t.category.toLowerCase().trim();
       if (catLower === 'villamor') t.category = 'Villamor';
@@ -1087,6 +1091,7 @@ function handleCreateTask(e) {
   const dueDate = taskDueDateInput ? taskDueDateInput.value : '';
   const category = getSelectedCategory(taskCategoryInput, taskCategoryCustomInput);
   const includeInAnalysis = taskIncludeInAnalysisCheckbox ? !!taskIncludeInAnalysisCheckbox.checked : false;
+  const workLocation = taskWorkLocationInput ? taskWorkLocationInput.value.trim() : '';
 
   const newTask = {
     id: generateId(),
@@ -1096,6 +1101,7 @@ function handleCreateTask(e) {
     recurrence: recurrence || 'diaria',
     dueDate: dueDate || null,
     includeInAnalysis: includeInAnalysis,
+    workLocation: workLocation,
     description: taskDescriptionInput.value.trim(),
     completed: false,
     createdAt: Date.now(),
@@ -1114,6 +1120,7 @@ function handleCreateTask(e) {
   // Reset form
   taskForm.reset();
   if (taskIncludeInAnalysisCheckbox) taskIncludeInAnalysisCheckbox.checked = false;
+  if (taskWorkLocationInput) taskWorkLocationInput.value = '';
   if (taskTimerMinutesInput) taskTimerMinutesInput.value = '25';
   if (taskRecurrenceSelect) taskRecurrenceSelect.value = 'diaria';
   if (taskCategoryInput) taskCategoryInput.value = 'Villamor';
@@ -1627,6 +1634,12 @@ function showRandomTaskModal(task, executionSeconds, totalCandidates, category =
     </div>
 
     ${task.description ? `<p class="random-picked-desc">${escapeHtml(task.description)}</p>` : ''}
+    ${task.workLocation ? `
+      <div class="random-work-location">
+        <span>📍</span>
+        <div><strong>Trabalhando em:</strong> ${escapeHtml(task.workLocation)}</div>
+      </div>
+    ` : ''}
 
     <div class="random-info-note">
       ${totalCandidates > 1 
@@ -2393,6 +2406,57 @@ function updateToggleAllButton() {
 }
 
 // ==========================================
+// Anotação de Onde Estou Trabalhando no Projeto
+// ==========================================
+
+function startInlineWorkLocationEdit(taskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  editingWorkLocationTaskId = taskId;
+  renderTasks();
+  setTimeout(() => {
+    const input = document.getElementById(`inline-work-input-${taskId}`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 20);
+}
+
+function saveInlineWorkLocation(taskId) {
+  const input = document.getElementById(`inline-work-input-${taskId}`);
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const val = input ? input.value.trim() : '';
+  task.workLocation = val;
+  editingWorkLocationTaskId = null;
+  saveTasks();
+  renderTasks();
+  dbUpsertTask(task);
+}
+
+function cancelInlineWorkLocation(taskId) {
+  editingWorkLocationTaskId = null;
+  renderTasks();
+}
+
+function clearWorkLocation(taskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+  task.workLocation = '';
+  editingWorkLocationTaskId = null;
+  saveTasks();
+  renderTasks();
+  dbUpsertTask(task);
+}
+
+// ==========================================
 // Edição de Tarefas e Subtarefas (Modais)
 // ==========================================
 
@@ -2426,6 +2490,7 @@ function openEditTaskModal(taskId) {
   if (editTaskTimerMinutesInput) editTaskTimerMinutesInput.value = Math.round(getTaskTargetSeconds(task) / 60);
   if (editTaskElapsedMinutesInput) editTaskElapsedMinutesInput.value = Math.round((task.elapsedSeconds || 0) / 60);
   if (editTaskDescriptionInput) editTaskDescriptionInput.value = task.description || '';
+  if (editTaskWorkLocationInput) editTaskWorkLocationInput.value = task.workLocation || '';
   if (editTaskIncludeInAnalysisCheckbox) {
     editTaskIncludeInAnalysisCheckbox.checked = !!task.includeInAnalysis;
   }
@@ -2525,6 +2590,7 @@ function handleSaveEditTask(e) {
   task.recurrence = editTaskRecurrenceSelect.value || 'diaria';
   task.dueDate = editTaskDueDateInput.value || null;
   task.description = editTaskDescriptionInput.value.trim();
+  task.workLocation = editTaskWorkLocationInput ? editTaskWorkLocationInput.value.trim() : '';
   if (editTaskIncludeInAnalysisCheckbox) {
     task.includeInAnalysis = !!editTaskIncludeInAnalysisCheckbox.checked;
   }
@@ -2707,8 +2773,9 @@ function renderTasks() {
       const matchTitle = task.title.toLowerCase().includes(searchQuery);
       const matchDesc = (task.description || '').toLowerCase().includes(searchQuery);
       const matchCat = (task.category || '').toLowerCase().includes(searchQuery);
+      const matchLocation = (task.workLocation || '').toLowerCase().includes(searchQuery);
       const matchSub = (task.subtasks || []).some(st => st.title.toLowerCase().includes(searchQuery));
-      return matchTitle || matchDesc || matchCat || matchSub;
+      return matchTitle || matchDesc || matchCat || matchLocation || matchSub;
     }
 
     return true;
@@ -2836,11 +2903,46 @@ function renderTasks() {
             <div class="task-text-group">
               <span class="task-title">${escapeHtml(task.title)}</span>
               ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ''}
+              ${editingWorkLocationTaskId === task.id ? `
+                <div class="inline-work-location-edit-row" onclick="event.stopPropagation()">
+                  <span class="work-location-icon">📍</span>
+                  <input 
+                    type="text" 
+                    id="inline-work-input-${task.id}" 
+                    class="inline-work-location-input" 
+                    value="${escapeHtml(task.workLocation || '')}" 
+                    placeholder="Onde você está trabalhando no projeto? (Ex: tela X, arquivo Y linha 50, branch Z)..."
+                    onkeydown="if(event.key==='Enter'){ saveInlineWorkLocation('${task.id}'); } else if(event.key==='Escape'){ cancelInlineWorkLocation('${task.id}'); }"
+                  >
+                  <button type="button" class="btn btn-primary btn-xs" onclick="saveInlineWorkLocation('${task.id}')" title="Salvar anotação (Enter)">💾 Salvar</button>
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="cancelInlineWorkLocation('${task.id}')" title="Cancelar (Esc)">Cancelar</button>
+                </div>
+              ` : (task.workLocation ? `
+                <div class="task-work-location-badge" id="work-location-box-${task.id}">
+                  <div class="work-location-content" onclick="startInlineWorkLocationEdit('${task.id}', event)" title="Clique para atualizar onde você está trabalhando no projeto">
+                    <span class="work-location-icon">📍</span>
+                    <span class="work-location-label">Trabalhando em:</span>
+                    <span class="work-location-value">${escapeHtml(task.workLocation)}</span>
+                    <button type="button" class="btn-work-location-edit" onclick="startInlineWorkLocationEdit('${task.id}', event)" title="Editar anotação">✏️</button>
+                  </div>
+                  <button type="button" class="btn-work-location-clear" onclick="clearWorkLocation('${task.id}', event)" title="Remover anotação">&times;</button>
+                </div>
+              ` : '')}
               <div class="task-meta-tags">
                 ${formatCategoryBadge(task.category)}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
                 ${formatDueDateBadge(task.dueDate, task.completed)}
+                ${(!task.workLocation && editingWorkLocationTaskId !== task.id) ? `
+                  <button 
+                    type="button" 
+                    class="badge badge-add-location clickable" 
+                    onclick="startInlineWorkLocationEdit('${task.id}', event)" 
+                    title="Anotar onde você está trabalhando nesta tarefa"
+                  >
+                    📍 + Onde estou trabalhando
+                  </button>
+                ` : ''}
                 ${task.includeInAnalysis ? `
                   <span 
                     class="badge badge-analysis-active clickable" 
@@ -3825,6 +3927,7 @@ function mapDbTaskToModel(row) {
     recurrence: row.recurrence || 'diaria',
     dueDate: row.due_date || null,
     includeInAnalysis: row.include_in_analysis !== undefined ? !!row.include_in_analysis : false,
+    workLocation: row.work_location || (row.workLocation || ''),
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
@@ -3851,6 +3954,7 @@ function mapModelToDbTask(task) {
     recurrence: task.recurrence || 'diaria',
     due_date: task.dueDate || null,
     include_in_analysis: !!task.includeInAnalysis,
+    work_location: task.workLocation || '',
     description: task.description || '',
     completed: !!task.completed,
     created_at: task.createdAt || Date.now(),
@@ -3880,12 +3984,13 @@ async function fetchFromSupabase() {
         // Banco no Supabase está vazio: envia as tarefas da rotina atual
         const rows = tasks.map(mapModelToDbTask);
         const { error: upsertErr } = await supabaseClient.from('tasks').upsert(rows);
-        if (upsertErr && (upsertErr.code === '42703' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date') || upsertErr.message.includes('include_in_analysis'))))) {
+        if (upsertErr && (upsertErr.code === '42703' || upsertErr.code === 'PGRST204' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date') || upsertErr.message.includes('include_in_analysis') || upsertErr.message.includes('work_location'))))) {
           const fallbackRows = rows.map(r => {
             const copy = { ...r };
             delete copy.recurrence;
             delete copy.due_date;
             delete copy.include_in_analysis;
+            delete copy.work_location;
             return copy;
           });
           await supabaseClient.from('tasks').upsert(fallbackRows);
@@ -3950,6 +4055,9 @@ async function fetchFromSupabase() {
             }
             if (!mapped.dueDate && existing.dueDate) {
               mapped.dueDate = existing.dueDate;
+            }
+            if (!mapped.workLocation && existing.workLocation) {
+              mapped.workLocation = existing.workLocation;
             }
           }
           return mapped;
@@ -4075,6 +4183,9 @@ function handleRealtimeChange(payload) {
       if (!updated.dueDate && existing && existing.dueDate) {
         updated.dueDate = existing.dueDate;
       }
+      if (!updated.workLocation && existing && existing.workLocation) {
+        updated.workLocation = existing.workLocation;
+      }
       tasks[idx] = updated;
       saveTasks();
       render();
@@ -4096,12 +4207,13 @@ async function dbUpsertTask(task) {
     const row = mapModelToDbTask(task);
     const { error } = await supabaseClient.from('tasks').upsert(row);
     if (error) {
-      if (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis')))) {
-        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date ou include_in_analysis criadas
+      if (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location')))) {
+        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date, include_in_analysis ou work_location criadas
         const fallbackRow = { ...row };
         delete fallbackRow.recurrence;
         delete fallbackRow.due_date;
         delete fallbackRow.include_in_analysis;
+        delete fallbackRow.work_location;
         await supabaseClient.from('tasks').upsert(fallbackRow);
       } else {
         console.warn('Aviso ao sincronizar tarefa com Supabase:', error.message);
@@ -4137,12 +4249,13 @@ async function dbSyncAllTasks() {
     updateSyncStatus('syncing', 'Sincronizando...');
     const rows = tasks.map(mapModelToDbTask);
     const { error } = await supabaseClient.from('tasks').upsert(rows);
-    if (error && (error.code === '42703' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis'))))) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location'))))) {
       const fallbackRows = rows.map(r => {
         const copy = { ...r };
         delete copy.recurrence;
         delete copy.due_date;
         delete copy.include_in_analysis;
+        delete copy.work_location;
         return copy;
       });
       await supabaseClient.from('tasks').upsert(fallbackRows);
@@ -4213,3 +4326,7 @@ window.handleSubtaskDragEnd = handleSubtaskDragEnd;
 window.handleTouchDragStart = handleTouchDragStart;
 window.handleTouchDragMove = handleTouchDragMove;
 window.handleTouchDragEnd = handleTouchDragEnd;
+window.startInlineWorkLocationEdit = startInlineWorkLocationEdit;
+window.saveInlineWorkLocation = saveInlineWorkLocation;
+window.cancelInlineWorkLocation = cancelInlineWorkLocation;
+window.clearWorkLocation = clearWorkLocation;
