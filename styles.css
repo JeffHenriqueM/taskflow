@@ -55,7 +55,7 @@ body {
 }
 
 .app-layout {
-  max-width: 1080px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 24px 20px 60px;
 }
@@ -778,9 +778,10 @@ textarea {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 18px 20px;
+  padding: 16px 18px;
   box-shadow: var(--shadow-sm);
   transition: border-color 0.2s, box-shadow 0.2s;
+  overflow: hidden;
 }
 
 .task-card:hover {
@@ -808,19 +809,20 @@ textarea {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 580px;
+  max-width: 100%;
 }
 
 .task-card.collapsed .task-work-location-badge {
   margin-top: 2px;
   padding: 2px 8px;
+  max-width: 100%;
 }
 
 .task-card.collapsed .task-work-location-badge .work-location-value {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 480px;
+  max-width: 100%;
 }
 
 .task-card.collapsed .badge-add-location {
@@ -836,13 +838,16 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
+  min-width: 0;
+  width: 100%;
 }
 
 .task-main-info {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .task-checkbox {
@@ -851,18 +856,22 @@ textarea {
   height: 18px;
   accent-color: var(--success);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .task-text-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .task-title {
   font-size: 16px;
   font-weight: 600;
   color: #fff;
+  word-break: break-word;
 }
 
 .task-card.completed .task-title {
@@ -874,6 +883,8 @@ textarea {
   font-size: 13px;
   color: var(--text-muted);
   white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .task-meta-tags {
@@ -966,20 +977,22 @@ textarea {
 .task-timer-area {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: var(--radius-md);
+  flex-shrink: 0;
+  max-width: 100%;
 }
 
 .timer-digits {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #e2e8f0;
-  min-width: 75px;
+  min-width: 68px;
   text-align: center;
 }
 
@@ -989,12 +1002,16 @@ textarea {
 
 .timer-btns {
   display: flex;
-  gap: 6px;
+  gap: 5px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .task-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 /* Onde estou trabalhando no projeto (Work Location Banner & Inline Editor) */
@@ -1430,6 +1447,19 @@ textarea {
 }
 
 /* Responsive adjustments */
+@media (max-width: 920px) {
+  .task-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .task-timer-area {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 768px) {
   .tasks-toolbar {
     flex-direction: column;
