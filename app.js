@@ -354,6 +354,37 @@ let screenBreakInterval = null;
 let screenBreakRemainingSeconds = 300;
 let isScreenBreakPaused = false;
 
+// Acompanhamento Mental, Venvanse & Diário
+const MIND_JOURNAL_STORAGE_KEY = 'taskflow_mind_journal_v1';
+let mindJournal = {};
+
+const lblMedicationStatus = document.getElementById('lblMedicationStatus');
+const lblCurveBadge = document.getElementById('lblCurveBadge');
+const lblCurveBadgeText = document.getElementById('lblCurveBadgeText');
+const lblCurrentFeelingEmoji = document.getElementById('lblCurrentFeelingEmoji');
+const lblCurrentFeelingText = document.getElementById('lblCurrentFeelingText');
+const lblCurrentBatteryMini = document.getElementById('lblCurrentBatteryMini');
+const lblDailyNotesCount = document.getElementById('lblDailyNotesCount');
+
+const medicationModal = document.getElementById('medicationModal');
+const medicationForm = document.getElementById('medicationForm');
+const chkMedicationTakenToday = document.getElementById('chkMedicationTakenToday');
+const medicationInputsBox = document.getElementById('medicationInputsBox');
+const medicationTimeInput = document.getElementById('medicationTimeInput');
+const medicationDosageSelect = document.getElementById('medicationDosageSelect');
+const medicationOffNotice = document.getElementById('medicationOffNotice');
+
+const moodCheckinModal = document.getElementById('moodCheckinModal');
+const moodCheckinForm = document.getElementById('moodCheckinForm');
+const checkinBatteryValue = document.getElementById('checkinBatteryValue');
+const checkinNoteInput = document.getElementById('checkinNoteInput');
+const todayCheckinsHistory = document.getElementById('todayCheckinsHistory');
+
+const dailyNotesModal = document.getElementById('dailyNotesModal');
+const dailyNotesForm = document.getElementById('dailyNotesForm');
+const dailyNotesAutoSummary = document.getElementById('dailyNotesAutoSummary');
+const dailyNotesTextarea = document.getElementById('dailyNotesTextarea');
+
 // Modal de Edição de Tarefa Completa
 const editTaskModal = document.getElementById('editTaskModal');
 const editTaskForm = document.getElementById('editTaskForm');
@@ -501,6 +532,14 @@ function loadData() {
     dailyHistory = {};
   }
 
+  // Carrega Diário Mental & Venvanse
+  try {
+    const rawMind = localStorage.getItem(MIND_JOURNAL_STORAGE_KEY);
+    mindJournal = rawMind ? JSON.parse(rawMind) : {};
+  } catch (e) {
+    mindJournal = {};
+  }
+
   // Carrega estado de tarefas recolhidas (collapsed)
   try {
     const rawCollapsed = localStorage.getItem('taskflow_collapsed_tasks');
@@ -610,9 +649,18 @@ function saveHistory() {
   }
 }
 
+function saveMindJournal() {
+  try {
+    localStorage.setItem(MIND_JOURNAL_STORAGE_KEY, JSON.stringify(mindJournal));
+  } catch (e) {
+    console.error('Erro ao salvar diário mental:', e);
+  }
+}
+
 function saveData() {
   saveTasks();
   saveHistory();
+  saveMindJournal();
   localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
 }
 
@@ -645,6 +693,8 @@ function archiveDay(dateKey, isManual = false) {
     totalPomodoros += (t.pomodoroCount || 0);
   });
 
+  const dayMind = mindJournal[dateKey] || getCurrentDayMind(dateKey);
+
   dailyHistory[dateKey] = {
     date: dateKey,
     dateDisplay: formatDateDisplay(dateKey),
@@ -656,7 +706,8 @@ function archiveDay(dateKey, isManual = false) {
     percent,
     totalSeconds,
     totalPomodoros,
-    tasks: JSON.parse(JSON.stringify(tasks))
+    tasks: JSON.parse(JSON.stringify(tasks)),
+    mindJournal: JSON.parse(JSON.stringify(dayMind))
   };
 
   saveHistory();
@@ -972,6 +1023,23 @@ function setupEventListeners() {
   if (screenBreakModal) {
     screenBreakModal.addEventListener('click', (e) => {
       if (e.target === screenBreakModal) closeScreenBreakModal();
+    });
+  }
+
+  // Modais de Venvanse, Check-in e Diário
+  if (medicationModal) {
+    medicationModal.addEventListener('click', (e) => {
+      if (e.target === medicationModal) closeMedicationModal();
+    });
+  }
+  if (moodCheckinModal) {
+    moodCheckinModal.addEventListener('click', (e) => {
+      if (e.target === moodCheckinModal) closeMoodCheckinModal();
+    });
+  }
+  if (dailyNotesModal) {
+    dailyNotesModal.addEventListener('click', (e) => {
+      if (e.target === dailyNotesModal) closeDailyNotesModal();
     });
   }
 
@@ -1842,13 +1910,38 @@ function formatImpactBadge(impact) {
 function evaluateCounselorDiagnosis() {
   const totalSecondsToday = tasks.reduce((acc, t) => acc + (t.elapsedSeconds || 0), 0);
   const totalPomodorosToday = tasks.reduce((acc, t) => acc + (t.pomodoroCount || 0), 0);
+  const currentMind = getCurrentDayMind();
+  const med = currentMind.medication;
+  const curve = getVenvanseCurveStatus(med);
+  const checkins = currentMind.checkins || [];
+  const lastCheckin = checkins.length > 0 ? checkins[checkins.length - 1] : null;
 
   let fatigueLevel = 'level-fresh';
   let fatigueIcon = '🟢';
   let headline = 'Mente Fresca & Alta Clareza';
   let message = 'Você está em um ótimo momento de energia. Ataque a tarefa de maior resultado agora e não gaste sua energia matinal com detalhes secundários.';
 
-  if (totalSecondsToday >= 18000 || totalPomodorosToday >= 8) { // 5h+
+  if (curve && curve.status === 'peak') {
+    fatigueLevel = 'level-fresh';
+    fatigueIcon = '🚀';
+    headline = `Pico do Venvanse Ativo — Janela de Ouro (${curve.hoursElapsed ? curve.hoursElapsed.toFixed(1) : ''}h pós-dose)`;
+    message = `Sua dopamina e foco estão no auge (${curve.peakWindowStr || ''}). Esta é a janela mais valiosa do seu dia. Proibido se distrair com e-mails ou tarefas fáceis: use este pico na tarefa de Alavanca!`;
+  } else if (curve && curve.status === 'crash') {
+    fatigueLevel = 'level-high';
+    fatigueIcon = '📉';
+    headline = `Declínio do Venvanse — Cuidado com o Crash`;
+    message = `O efeito do remédio está caindo (${curve.hoursElapsed ? curve.hoursElapsed.toFixed(1) : ''}h pós-dose). Seu cérebro está sem bateria dopaminérgica. Não force tarefas difíceis agora nem se sinta culpado se bater lentidão. Encerre o trabalho ou faça tarefas leves.`;
+  } else if (lastCheckin && lastCheckin.feeling === 'ansioso') {
+    fatigueLevel = 'level-moderate';
+    fatigueIcon = '🌀';
+    headline = 'Mente Acelerada / Ansiosa Detectada';
+    message = `Seu último check-in indicou que você está acelerado ou ansioso. O estímulo do remédio pode estar alto. Beba água agora e faça uma Pausa de Tela de 5 minutos antes de começar.`;
+  } else if (med && med.taken === false) {
+    fatigueLevel = 'level-moderate';
+    fatigueIcon = '🛋️';
+    headline = 'Dia de Descanso & Pausa do Remédio';
+    message = 'Hoje você está sem o remédio para recarregar sua dopamina natural. Pegue leve, faça tarefas de vida e cuide de você fora da tela.';
+  } else if (totalSecondsToday >= 18000 || totalPomodorosToday >= 8) { // 5h+
     fatigueLevel = 'level-high';
     fatigueIcon = '🔴';
     headline = 'Saturação Mental Elevada — Risco de Esgotamento';
@@ -1866,7 +1959,9 @@ function evaluateCounselorDiagnosis() {
     fatigueLevel,
     fatigueIcon,
     headline,
-    message
+    message,
+    curve,
+    lastCheckin
   };
 }
 
@@ -1883,10 +1978,18 @@ function calculateTaskCounselorScore(task, diagnosis) {
   // Impacto
   if (impact === 'alavanca') {
     score += 50;
+    if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'peak') {
+      score += 25; // Super bônus no pico do Venvanse
+    } else if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'crash') {
+      score -= 15; // Menos atrito cognitivo no crash
+    }
   } else if (impact === 'operacional') {
     score += 20;
+    if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'crash') {
+      score += 15; // Tarefas leves são preferíveis no crash
+    }
   } else if (impact === 'vida') {
-    if (diagnosis.fatigueLevel === 'level-high') {
+    if (diagnosis.fatigueLevel === 'level-high' || (diagnosis.curve && diagnosis.curve.status === 'crash')) {
       score += 65;
     } else {
       score += 15;
@@ -1937,6 +2040,12 @@ function generateCounselorReasoning(task, diagnosis) {
   if (isRunning) {
     reasonTitle = 'Você já tem um cronômetro rodando aqui!';
     reasonText = 'Evite pular de tarefa em tarefa. Termine o bloco atual nesta pendência antes de pensar em qualquer outra coisa.';
+  } else if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'peak' && impact === 'alavanca') {
+    reasonTitle = '🚀 Janela de Ouro do Venvanse: Hora da Alavanca';
+    reasonText = `Você está no pico biológico do remédio (${diagnosis.curve.hoursElapsed ? diagnosis.curve.hoursElapsed.toFixed(1) : ''}h pós-dose). Não desperdice essa neuroquímica em bobagens. Foque 1 bloco nesta alavanca e destrave seu projeto!`;
+  } else if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'crash') {
+    reasonTitle = '📉 Queda de Efeito (Declínio Dopaminérgico)';
+    reasonText = `O efeito do Venvanse está diminuindo. Se você sentir lentidão ou cansaço, é pura química cerebral. Feche apenas o essencial sem se cobrar perfeição e prepare-se para descansar longe da tela.`;
   } else if (elapsed >= 7200) {
     reasonTitle = '⚠️ Atenção: Perfeccionismo ou Gargalo Detectado';
     reasonText = `Você já dedicou ${formatReadableTime(elapsed)} nesta tarefa hoje. Cuidado para não cair na armadilha de polir infinitamente. Foque em fechar o escopo essencial nos próximos 25 minutos.`;
@@ -2181,6 +2290,493 @@ window.openCounselorModal = openCounselorModal;
 window.closeCounselorModal = closeCounselorModal;
 window.openScreenBreakModal = openScreenBreakModal;
 window.closeScreenBreakModal = closeScreenBreakModal;
+
+// ==========================================
+// Acompanhamento Mental, Venvanse & Diário de Bordo
+// ==========================================
+
+function getCurrentDayMind(targetDateKey = null) {
+  const dKey = targetDateKey || activeDate || getTodayDateKey();
+  if (!mindJournal[dKey]) {
+    mindJournal[dKey] = {
+      medication: {
+        taken: null,
+        time: '',
+        dosage: '50mg'
+      },
+      checkins: [],
+      dailyNotes: ''
+    };
+  }
+  return mindJournal[dKey];
+}
+
+function getVenvanseCurveStatus(medication) {
+  if (!medication || medication.taken === null || medication.taken === undefined) {
+    return {
+      status: 'unregistered',
+      label: 'Venvanse não registrado hoje',
+      icon: '💊',
+      phaseClass: '',
+      color: '#94a3b8',
+      hoursElapsed: null,
+      message: 'Registre o horário do Venvanse para mapear seu pico de foco.'
+    };
+  }
+
+  if (medication.taken === false) {
+    return {
+      status: 'off',
+      label: '🛋️ Dia de Descanso (Sem Venvanse)',
+      icon: '🛋️',
+      phaseClass: 'phase-off',
+      color: '#c084fc',
+      hoursElapsed: null,
+      message: 'Dia de pausa do remédio. Recarregue sua dopamina natural no mundo real!'
+    };
+  }
+
+  if (!medication.time) {
+    return {
+      status: 'unregistered',
+      label: 'Horário não informado',
+      icon: '💊',
+      phaseClass: '',
+      color: '#94a3b8',
+      hoursElapsed: null,
+      message: 'Informe o horário em que tomou o remédio.'
+    };
+  }
+
+  const [hours, mins] = medication.time.split(':').map(Number);
+  const now = new Date();
+  const takenDate = new Date();
+  takenDate.setHours(hours, mins, 0, 0);
+
+  const diffMs = now.getTime() - takenDate.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  if (diffHours < 0) {
+    return {
+      status: 'future',
+      label: `Dose agendada às ${medication.time}`,
+      icon: '⏳',
+      phaseClass: 'phase-onset',
+      color: '#60a5fa',
+      hoursElapsed: 0,
+      message: 'Horário registrado no futuro.'
+    };
+  }
+
+  const peakStartDate = new Date(takenDate.getTime() + 1.5 * 60 * 60 * 1000);
+  const peakEndDate = new Date(takenDate.getTime() + 6 * 60 * 60 * 1000);
+  const crashStartDate = new Date(takenDate.getTime() + 8.5 * 60 * 60 * 1000);
+
+  const formatH = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  if (diffHours < 1.5) {
+    return {
+      status: 'onset',
+      label: `Absorvendo (Início do efeito até ${formatH(peakStartDate)})`,
+      icon: '⏳',
+      phaseClass: 'phase-onset',
+      color: '#38bdf8',
+      hoursElapsed: diffHours,
+      peakWindowStr: `${formatH(peakStartDate)} - ${formatH(peakEndDate)}`,
+      crashTimeStr: formatH(crashStartDate),
+      message: `O Venvanse está começando a agir. Sua Janela de Ouro começa às ${formatH(peakStartDate)}. Prepare o ambiente e selecione sua tarefa de Alavanca.`
+    };
+  } else if (diffHours >= 1.5 && diffHours <= 6) {
+    return {
+      status: 'peak',
+      label: `🚀 Janela de Ouro (Pico de foco até ${formatH(peakEndDate)})`,
+      icon: '🚀',
+      phaseClass: 'phase-peak',
+      color: '#34d399',
+      hoursElapsed: diffHours,
+      peakWindowStr: `${formatH(peakStartDate)} - ${formatH(peakEndDate)}`,
+      crashTimeStr: formatH(crashStartDate),
+      message: `Você está no pico do Venvanse (${diffHours.toFixed(1)}h após a dose). Capacidade de foco no auge! Proibido gastar em e-mails ou distrações; ataque a tarefa de maior resultado agora.`
+    };
+  } else if (diffHours > 6 && diffHours <= 8.5) {
+    return {
+      status: 'maintenance',
+      label: `⚡ Foco Moderado (Sustentação até ${formatH(crashStartDate)})`,
+      icon: '⚡',
+      phaseClass: 'phase-maintenance',
+      color: '#fbbf24',
+      hoursElapsed: diffHours,
+      peakWindowStr: `${formatH(peakStartDate)} - ${formatH(peakEndDate)}`,
+      crashTimeStr: formatH(crashStartDate),
+      message: `Fase de sustentação (${diffHours.toFixed(1)}h pós-dose). Bom momento para operações ou reuniões. Beba água e faça pausas de tela para suavizar o cansaço.`
+    };
+  } else if (diffHours > 8.5 && diffHours <= 12) {
+    return {
+      status: 'crash',
+      label: `📉 Declínio do Efeito (${diffHours.toFixed(1)}h pós-dose)`,
+      icon: '📉',
+      phaseClass: 'phase-crash',
+      color: '#f87171',
+      hoursElapsed: diffHours,
+      peakWindowStr: `${formatH(peakStartDate)} - ${formatH(peakEndDate)}`,
+      crashTimeStr: formatH(crashStartDate),
+      message: `O efeito do remédio está caindo. É natural sentir cansaço ou lentidão mental. Não force tarefas difíceis nem se culpe. Encerre o trabalho e vá relaxar.`
+    };
+  } else {
+    return {
+      status: 'night',
+      label: `🌙 Noite / Fora da Janela (+12h pós-dose)`,
+      icon: '🌙',
+      phaseClass: 'phase-off',
+      color: '#a78bfa',
+      hoursElapsed: diffHours,
+      peakWindowStr: `${formatH(peakStartDate)} - ${formatH(peakEndDate)}`,
+      crashTimeStr: formatH(crashStartDate),
+      message: `Mais de 12 horas desde a dose. Desligue as telas e prepare-se para dormir bem.`
+    };
+  }
+}
+
+function updateMindTrackerBar() {
+  const currentMind = getCurrentDayMind();
+  const med = currentMind.medication || {};
+  const curve = getVenvanseCurveStatus(med);
+
+  if (lblMedicationStatus) {
+    if (med.taken === true && med.time) {
+      lblMedicationStatus.textContent = `Tomou às ${med.time}${med.dosage ? ` (${med.dosage})` : ''}`;
+    } else if (med.taken === false) {
+      lblMedicationStatus.textContent = `Pausa / Folga (Sem dose)`;
+    } else {
+      lblMedicationStatus.textContent = `Não registrado hoje`;
+    }
+  }
+
+  if (lblCurveBadge && lblCurveBadgeText) {
+    lblCurveBadge.className = `curve-badge ${curve.phaseClass}`;
+    lblCurveBadgeText.textContent = curve.label;
+    lblCurveBadge.title = curve.message;
+  }
+
+  // Atualiza sentimento atual com base no último check-in
+  const checkins = currentMind.checkins || [];
+  if (checkins.length > 0) {
+    const latest = checkins[checkins.length - 1];
+    if (lblCurrentFeelingEmoji) lblCurrentFeelingEmoji.textContent = getFeelingEmoji(latest.feeling);
+    if (lblCurrentFeelingText) lblCurrentFeelingText.textContent = `${latest.feelingName || getFeelingName(latest.feeling)} (${latest.time})`;
+    if (lblCurrentBatteryMini) lblCurrentBatteryMini.textContent = `🔋 ${latest.battery}%`;
+  } else {
+    if (lblCurrentFeelingEmoji) lblCurrentFeelingEmoji.textContent = '🧠';
+    if (lblCurrentFeelingText) lblCurrentFeelingText.textContent = 'Como estou me sentindo?';
+    if (lblCurrentBatteryMini) lblCurrentBatteryMini.textContent = 'Check-in';
+  }
+
+  // Badge de notas diárias
+  if (lblDailyNotesCount) {
+    if (currentMind.dailyNotes && currentMind.dailyNotes.trim()) {
+      lblDailyNotesCount.classList.remove('hidden');
+    } else {
+      lblDailyNotesCount.classList.add('hidden');
+    }
+  }
+}
+
+function getFeelingEmoji(key) {
+  switch (key) {
+    case 'pico': return '🚀';
+    case 'calmo': return '🎯';
+    case 'ansioso': return '🌀';
+    case 'queda': return '📉';
+    case 'esgotado': return '🥱';
+    default: return '🧠';
+  }
+}
+
+function getFeelingName(key) {
+  switch (key) {
+    case 'pico': return 'Hiperfocado / Pico';
+    case 'calmo': return 'Foco Calmo';
+    case 'ansioso': return 'Acelerado / Ansioso';
+    case 'queda': return 'Queda / Crash';
+    case 'esgotado': return 'Esgotado';
+    default: return 'Check-in';
+  }
+}
+
+// Modal do Venvanse
+function openMedicationModal() {
+  const currentMind = getCurrentDayMind();
+  const med = currentMind.medication || {};
+
+  if (chkMedicationTakenToday) {
+    chkMedicationTakenToday.checked = med.taken !== false;
+  }
+  if (medicationTimeInput) {
+    if (med.time) {
+      medicationTimeInput.value = med.time;
+    } else {
+      const now = new Date();
+      medicationTimeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+  }
+  if (medicationDosageSelect) {
+    medicationDosageSelect.value = med.dosage || '50mg';
+  }
+
+  toggleMedicationTakenState();
+  if (medicationModal) medicationModal.classList.remove('hidden');
+}
+
+function closeMedicationModal() {
+  if (medicationModal) medicationModal.classList.add('hidden');
+}
+
+function toggleMedicationTakenState() {
+  const taken = chkMedicationTakenToday ? chkMedicationTakenToday.checked : true;
+  if (medicationInputsBox && medicationOffNotice) {
+    if (taken) {
+      medicationInputsBox.classList.remove('hidden');
+      medicationOffNotice.classList.add('hidden');
+      if (medicationTimeInput) medicationTimeInput.required = true;
+    } else {
+      medicationInputsBox.classList.add('hidden');
+      medicationOffNotice.classList.remove('hidden');
+      if (medicationTimeInput) medicationTimeInput.required = false;
+    }
+  }
+}
+
+function handleSaveMedication(e) {
+  e.preventDefault();
+  const currentMind = getCurrentDayMind();
+  const taken = chkMedicationTakenToday ? chkMedicationTakenToday.checked : true;
+
+  if (taken) {
+    const time = medicationTimeInput ? medicationTimeInput.value : '';
+    const dosage = medicationDosageSelect ? medicationDosageSelect.value : '50mg';
+    currentMind.medication = {
+      taken: true,
+      time: time,
+      dosage: dosage,
+      updatedAt: Date.now()
+    };
+  } else {
+    currentMind.medication = {
+      taken: false,
+      time: '',
+      dosage: '',
+      updatedAt: Date.now()
+    };
+  }
+
+  saveMindJournal();
+  updateMindTrackerBar();
+  closeMedicationModal();
+}
+
+function clearMedicationToday() {
+  const currentMind = getCurrentDayMind();
+  currentMind.medication = {
+    taken: null,
+    time: '',
+    dosage: '50mg'
+  };
+  saveMindJournal();
+  updateMindTrackerBar();
+  closeMedicationModal();
+}
+
+// Modal de Micro Check-in
+function openMoodCheckinModal() {
+  renderTodayCheckinsHistory();
+  if (checkinNoteInput) checkinNoteInput.value = '';
+  selectCheckinBattery(100);
+  if (moodCheckinModal) moodCheckinModal.classList.remove('hidden');
+}
+
+function closeMoodCheckinModal() {
+  if (moodCheckinModal) moodCheckinModal.classList.add('hidden');
+}
+
+function selectCheckinBattery(val) {
+  if (checkinBatteryValue) checkinBatteryValue.value = val;
+  const buttons = document.querySelectorAll('.checkin-battery-selector .btn-battery');
+  buttons.forEach(b => {
+    b.classList.toggle('active', Number(b.dataset.battery) === Number(val));
+  });
+}
+
+function handleSaveMoodCheckin(e) {
+  e.preventDefault();
+  const currentMind = getCurrentDayMind();
+  const selectedRadio = document.querySelector('input[name="checkinFeeling"]:checked');
+  const feeling = selectedRadio ? selectedRadio.value : 'calmo';
+  const battery = checkinBatteryValue ? Number(checkinBatteryValue.value) : 100;
+  const note = checkinNoteInput ? checkinNoteInput.value.trim() : '';
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  const checkinItem = {
+    id: 'chk_' + Date.now(),
+    timestamp: Date.now(),
+    time: timeStr,
+    feeling: feeling,
+    feelingName: getFeelingName(feeling),
+    battery: battery,
+    note: note
+  };
+
+  currentMind.checkins = currentMind.checkins || [];
+  currentMind.checkins.push(checkinItem);
+
+  saveMindJournal();
+  updateMindTrackerBar();
+  closeMoodCheckinModal();
+}
+
+function renderTodayCheckinsHistory() {
+  if (!todayCheckinsHistory) return;
+  const currentMind = getCurrentDayMind();
+  const checkins = currentMind.checkins || [];
+
+  if (checkins.length === 0) {
+    todayCheckinsHistory.innerHTML = `
+      <div style="color: var(--text-dim); font-size: 12px; text-align: center; padding: 6px 0;">
+        Nenhum check-in registrado hoje ainda. Registre o primeiro acima!
+      </div>
+    `;
+    return;
+  }
+
+  todayCheckinsHistory.innerHTML = `
+    <div style="font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase;">
+      Check-ins de Hoje (${checkins.length})
+    </div>
+    ${checkins.slice().reverse().map(c => `
+      <div class="today-checkin-item">
+        <div class="today-checkin-left">
+          <span class="today-checkin-time">${c.time}</span>
+          <span>${getFeelingEmoji(c.feeling)} <strong>${escapeHtml(c.feelingName || getFeelingName(c.feeling))}</strong></span>
+          ${c.note ? `<span style="color: var(--text-muted); font-style: italic;">"${escapeHtml(c.note)}"</span>` : ''}
+        </div>
+        <span style="font-size: 11px; color: #a7f3d0; font-family: ui-monospace, monospace;">🔋 ${c.battery}%</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+// Modal de Diário de Bordo
+function openDailyNotesModal() {
+  const currentMind = getCurrentDayMind();
+  const med = currentMind.medication;
+  const curve = getVenvanseCurveStatus(med);
+  const totalSecondsToday = tasks.reduce((acc, t) => acc + (t.elapsedSeconds || 0), 0);
+  const totalPomodorosToday = tasks.reduce((acc, t) => acc + (t.pomodoroCount || 0), 0);
+
+  if (dailyNotesAutoSummary) {
+    let medStr = '💊 Venvanse: Não registrado';
+    if (med && med.taken === true && med.time) {
+      medStr = `💊 Venvanse: Tomou às ${med.time}${med.dosage ? ` (${med.dosage})` : ''} • Curva: ${curve.label}`;
+    } else if (med && med.taken === false) {
+      medStr = '🛋️ Dia sem Venvanse (Pausa de descanso)';
+    }
+
+    const checkinsCount = (currentMind.checkins || []).length;
+    dailyNotesAutoSummary.innerHTML = `
+      <div><strong>Resumo Automático do Dia:</strong></div>
+      <div style="margin-top: 4px; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+        ${medStr}<br>
+        ⏱️ Foco na tela: ${formatReadableTime(totalSecondsToday)} (${totalPomodorosToday} blocos Pomodoro)<br>
+        🧠 Check-ins de mente: ${checkinsCount} registro(s) feito(s) hoje
+      </div>
+    `;
+  }
+
+  if (dailyNotesTextarea) {
+    dailyNotesTextarea.value = currentMind.dailyNotes || '';
+  }
+
+  if (dailyNotesModal) dailyNotesModal.classList.remove('hidden');
+}
+
+function closeDailyNotesModal() {
+  if (dailyNotesModal) dailyNotesModal.classList.add('hidden');
+}
+
+function handleSaveDailyNotes(e) {
+  e.preventDefault();
+  const currentMind = getCurrentDayMind();
+  if (dailyNotesTextarea) {
+    currentMind.dailyNotes = dailyNotesTextarea.value.trim();
+  }
+  saveMindJournal();
+  updateMindTrackerBar();
+  closeDailyNotesModal();
+}
+
+// Strip Mental no Histórico
+function renderHistoryMindStrip(mj) {
+  if (!mj) return '';
+  const med = mj.medication;
+  const checkins = mj.checkins || [];
+  const notes = mj.dailyNotes;
+
+  let medHtml = '';
+  if (med && med.taken === true && med.time) {
+    medHtml = `<span style="color: #38bdf8; font-weight: 600;">💊 Venvanse às ${med.time}${med.dosage ? ` (${med.dosage})` : ''}</span>`;
+  } else if (med && med.taken === false) {
+    medHtml = `<span style="color: #c084fc; font-weight: 600;">🛋️ Pausa do remédio</span>`;
+  }
+
+  let checkinsHtml = '';
+  if (checkins.length > 0) {
+    checkinsHtml = `
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        ${checkins.map(c => `
+          <span style="background: rgba(0,0,0,0.25); padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+            ${c.time} ${getFeelingEmoji(c.feeling)} ${escapeHtml(c.feelingName || getFeelingName(c.feeling))} (${c.battery}%)
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  let notesHtml = '';
+  if (notes) {
+    notesHtml = `
+      <div class="history-reflection-box">
+        <strong>📝 Diário de Bordo do Dia:</strong>
+        ${escapeHtml(notes)}
+      </div>
+    `;
+  }
+
+  if (!medHtml && !checkinsHtml && !notesHtml) return '';
+
+  return `
+    <div class="history-mind-strip">
+      ${medHtml}
+      ${checkinsHtml}
+    </div>
+    ${notesHtml}
+  `;
+}
+
+window.openMedicationModal = openMedicationModal;
+window.closeMedicationModal = closeMedicationModal;
+window.toggleMedicationTakenState = toggleMedicationTakenState;
+window.handleSaveMedication = handleSaveMedication;
+window.clearMedicationToday = clearMedicationToday;
+
+window.openMoodCheckinModal = openMoodCheckinModal;
+window.closeMoodCheckinModal = closeMoodCheckinModal;
+window.selectCheckinBattery = selectCheckinBattery;
+window.handleSaveMoodCheckin = handleSaveMoodCheckin;
+
+window.openDailyNotesModal = openDailyNotesModal;
+window.closeDailyNotesModal = closeDailyNotesModal;
+window.handleSaveDailyNotes = handleSaveDailyNotes;
 
 // Configuração e Alteração da Duração da Tarefa
 function openTimerConfig(taskId, e) {
@@ -2563,6 +3159,11 @@ function startGlobalTicker() {
   setInterval(() => {
     // 1. Verifica virada de dia em tempo real (mesmo com a aba aberta à meia-noite)
     checkDayRollover();
+
+    // Atualiza a barra da curva do Venvanse periodicamente
+    if (Date.now() % 10000 < 1000) {
+      updateMindTrackerBar();
+    }
 
     // 2. Banner e contagem regressiva da tarefa em andamento
     const runningTask = tasks.find(t => t.isRunning);
@@ -3238,6 +3839,7 @@ function render() {
   updateMetrics();
   updateAnalysisBadge();
   updateRandomCategoryOptions();
+  updateMindTrackerBar();
   renderTasks();
   if (activeTab === 'analysis') {
     renderAnalysis();
@@ -3879,6 +4481,7 @@ function renderHistory() {
         </div>
 
         <div class="history-day-body">
+          ${renderHistoryMindStrip(entry.mindJournal || mindJournal[dateKey])}
           <div class="history-columns">
             <!-- Coluna Concluídas -->
             <div class="history-column">

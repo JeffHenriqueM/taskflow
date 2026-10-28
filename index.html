@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=2.6">
+  <link rel="stylesheet" href="styles.css?v=2.7">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -71,6 +71,35 @@
         <button type="button" id="btnCompleteDay" class="btn btn-finish-day" title="Arquiva o relatório do dia no Histórico e prepara a rotina para o próximo dia">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
           Fechar o Dia
+        </button>
+      </div>
+    </section>
+
+    <!-- Mind & Venvanse Companion Bar -->
+    <section class="mind-tracker-bar" id="mindTrackerBar">
+      <div class="mind-medication-group">
+        <div class="medication-pill" id="medicationStatusPill" onclick="openMedicationModal()" title="Clique para registrar ou alterar o horário do Venvanse hoje">
+          <span class="medication-icon">💊</span>
+          <div class="medication-text-col">
+            <span class="medication-label">Venvanse</span>
+            <span class="medication-status-text" id="lblMedicationStatus">Não registrado hoje</span>
+          </div>
+          <span class="medication-action-hint">✏️</span>
+        </div>
+        <div class="curve-badge" id="lblCurveBadge">
+          <span class="curve-badge-dot"></span>
+          <span id="lblCurveBadgeText">Aguardando registro de horário</span>
+        </div>
+      </div>
+
+      <div class="mind-actions-group">
+        <button type="button" class="btn btn-mind-checkin" id="btnOpenCheckinModal" onclick="openMoodCheckinModal()" title="Registrar como você está se sentindo agora (energia, foco e humor)">
+          <span class="checkin-emoji-icon" id="lblCurrentFeelingEmoji">🧠</span>
+          <span id="lblCurrentFeelingText">Como estou me sentindo?</span>
+          <span class="checkin-battery-mini" id="lblCurrentBatteryMini">🔋 100%</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-daily-notes" id="btnOpenDailyNotesModal" onclick="openDailyNotesModal()" title="Anotar reflexões do dia e como foi o trabalho/descanso">
+          📝 Diário do Dia <span id="lblDailyNotesCount" class="notes-count-badge hidden">✓</span>
         </button>
       </div>
     </section>
@@ -800,7 +829,205 @@
     </div>
   </div>
 
+  <!-- Modal de Registro do Venvanse -->
+  <div id="medicationModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card medication-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">💊</span>
+          <div>
+            <h3>Registro do Venvanse</h3>
+            <p class="modal-subtitle">Acompanhe sua Janela de Ouro de foco e preveja momentos de cansaço</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeMedicationModal()" title="Fechar">&times;</button>
+      </div>
+
+      <form id="medicationForm" onsubmit="handleSaveMedication(event)">
+        <div class="medication-choice-row">
+          <label class="medication-toggle-label">
+            <input type="checkbox" id="chkMedicationTakenToday" checked onchange="toggleMedicationTakenState()">
+            <span>Tomei meu Venvanse hoje</span>
+          </label>
+        </div>
+
+        <div id="medicationInputsBox" class="medication-inputs-box">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="medicationTimeInput">Horário da Dose *</label>
+              <input type="time" id="medicationTimeInput" required>
+            </div>
+            <div class="form-group" style="min-width: 140px;">
+              <label for="medicationDosageSelect">Dosagem</label>
+              <select id="medicationDosageSelect">
+                <option value="30mg">30 mg</option>
+                <option value="50mg" selected>50 mg</option>
+                <option value="70mg">70 mg</option>
+                <option value="outra">Outra</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="venvanse-curve-timeline">
+            <div class="curve-timeline-title">📈 Curva Farmacológica Estimada do Dia:</div>
+            <div class="curve-step-list">
+              <div class="curve-step">
+                <span class="curve-step-badge blue">0h - 1.5h</span>
+                <span><strong>Início Suave:</strong> Absorção do remédio. Bom momento para organizar o dia.</span>
+              </div>
+              <div class="curve-step">
+                <span class="curve-step-badge green">1.5h - 6h</span>
+                <span><strong>🚀 Janela de Ouro (Pico):</strong> Foco máximo. Exclusivo para tarefas de Alavanca!</span>
+              </div>
+              <div class="curve-step">
+                <span class="curve-step-badge orange">6h - 8.5h</span>
+                <span><strong>⚡ Sustentação:</strong> Foco moderado. Operações, reuniões e pausas de tela.</span>
+              </div>
+              <div class="curve-step">
+                <span class="curve-step-badge red">8.5h - 12h</span>
+                <span><strong>📉 Queda (Crash):</strong> Dopamina caindo. Cansaço normal. Pare e relaxe.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="medicationOffNotice" class="medication-off-notice hidden">
+          <div class="off-notice-icon">🛋️</div>
+          <h4>Dia sem Venvanse (Pausa / Folga)</h4>
+          <p>
+            Excelente escolha se hoje é seu dia de descanso. Dias sem remédio são vitais para recuperar a sensibilidade dopaminérgica. 
+            Não se cobre alta produtividade na tela: vá passear, dormir, comer bem e viver o mundo real!
+          </p>
+        </div>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Salvar Horário</button>
+          <button type="button" class="btn btn-secondary" onclick="clearMedicationToday()">Remover Registro</button>
+          <button type="button" class="btn btn-secondary" onclick="closeMedicationModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de Micro Check-in de Energia & Humor -->
+  <div id="moodCheckinModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card checkin-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">🧠</span>
+          <div>
+            <h3>Como você está se sentindo agora?</h3>
+            <p class="modal-subtitle">Check-in de 10 segundos para mapear seu ritmo biológico e evitar hiperfoco vazio</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeMoodCheckinModal()" title="Fechar">&times;</button>
+      </div>
+
+      <form id="moodCheckinForm" onsubmit="handleSaveMoodCheckin(event)">
+        <label class="checkin-section-label">Como está sua mente e seu foco?</label>
+        <div class="checkin-feelings-grid">
+          <label class="feeling-option">
+            <input type="radio" name="checkinFeeling" value="pico" checked>
+            <div class="feeling-box">
+              <span class="feeling-emoji">🚀</span>
+              <span class="feeling-name">Hiperfocado / Pico</span>
+              <span class="feeling-desc">No pique do remédio, querendo fazer tudo</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="radio" name="checkinFeeling" value="calmo">
+            <div class="feeling-box">
+              <span class="feeling-emoji">🎯</span>
+              <span class="feeling-name">Foco Calmo & Produtivo</span>
+              <span class="feeling-desc">Clareza mental sem ansiedade (estado ideal)</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="radio" name="checkinFeeling" value="ansioso">
+            <div class="feeling-box">
+              <span class="feeling-emoji">🌀</span>
+              <span class="feeling-name">Acelerado / Ansioso</span>
+              <span class="feeling-desc">Acelerado demais ou pulando de aba em aba</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="radio" name="checkinFeeling" value="queda">
+            <div class="feeling-box">
+              <span class="feeling-emoji">📉</span>
+              <span class="feeling-name">Queda de Energia / Crash</span>
+              <span class="feeling-desc">Remédio perdendo efeito, desânimo ou lentidão</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="radio" name="checkinFeeling" value="esgotado">
+            <div class="feeling-box">
+              <span class="feeling-emoji">🥱</span>
+              <span class="feeling-name">Esgotado de Tela</span>
+              <span class="feeling-desc">Olhos cansados, cabeça pesada, hora de parar</span>
+            </div>
+          </label>
+        </div>
+
+        <label class="checkin-section-label">Bateria mental estimada:</label>
+        <div class="checkin-battery-selector">
+          <button type="button" class="btn-battery active" data-battery="100" onclick="selectCheckinBattery(100)">🔋 100%</button>
+          <button type="button" class="btn-battery" data-battery="75" onclick="selectCheckinBattery(75)">🔋 75%</button>
+          <button type="button" class="btn-battery" data-battery="50" onclick="selectCheckinBattery(50)">🪫 50%</button>
+          <button type="button" class="btn-battery" data-battery="25" onclick="selectCheckinBattery(25)">🪫 25%</button>
+          <button type="button" class="btn-battery" data-battery="10" onclick="selectCheckinBattery(10)">🪫 10%</button>
+          <input type="hidden" id="checkinBatteryValue" value="100">
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="checkinNoteInput">O que está na sua cabeça agora? (Opcional, 1 linha)</label>
+          <input type="text" id="checkinNoteInput" placeholder="Ex: Travado no layout, esqueci de almoçar, foco muito bom agora...">
+        </div>
+
+        <div class="today-checkins-history" id="todayCheckinsHistory">
+          <!-- Renderizado via JS -->
+        </div>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Registrar Sentimento</button>
+          <button type="button" class="btn btn-secondary" onclick="closeMoodCheckinModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de Diário de Bordo do Dia -->
+  <div id="dailyNotesModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card notes-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">📝</span>
+          <div>
+            <h3>Diário de Bordo do Dia</h3>
+            <p class="modal-subtitle">Como foi seu dia hoje? Trabalho, descanso, mente e lições aprendidas</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeDailyNotesModal()" title="Fechar">&times;</button>
+      </div>
+
+      <form id="dailyNotesForm" onsubmit="handleSaveDailyNotes(event)">
+        <div class="daily-notes-summary" id="dailyNotesAutoSummary">
+          <!-- Resumo de horas de tela, remédio e check-ins -->
+        </div>
+
+        <div class="form-group">
+          <label for="dailyNotesTextarea">Sua Reflexão do Dia:</label>
+          <textarea id="dailyNotesTextarea" rows="5" placeholder="Como você se sentiu hoje? Conseguiu fazer pausas? Ficou muito tempo em casa ou conseguiu sair? O que funcionou e o que você quer mudar amanhã?"></textarea>
+        </div>
+
+        <div class="modal-buttons-row">
+          <button type="submit" class="btn btn-primary">💾 Salvar Diário</button>
+          <button type="button" class="btn btn-secondary" onclick="closeDailyNotesModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=2.6"></script>
+  <script src="app.js?v=2.7"></script>
 </body>
 </html>

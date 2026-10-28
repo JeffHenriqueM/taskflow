@@ -1532,6 +1532,24 @@ textarea {
     width: 100%;
     justify-content: space-between;
   }
+  .mind-tracker-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .mind-medication-group,
+  .mind-actions-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .medication-pill {
+    flex: 1;
+  }
+  .btn-mind-checkin,
+  .btn-daily-notes {
+    flex: 1;
+    justify-content: center;
+  }
   .analysis-header {
     flex-direction: column;
     align-items: flex-start;
@@ -3325,6 +3343,490 @@ textarea {
   color: #cbd5e1;
   margin-bottom: 22px;
   text-align: left;
+}
+
+/* ==========================================
+   Barra de Acompanhamento Mental & Curva do Venvanse
+   ========================================== */
+.mind-tracker-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.mind-medication-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.medication-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.medication-pill:hover {
+  background: rgba(14, 165, 233, 0.18);
+  border-color: rgba(56, 189, 248, 0.5);
+  transform: translateY(-1px);
+}
+
+.medication-icon {
+  font-size: 16px;
+}
+
+.medication-text-col {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.medication-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.medication-status-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.medication-action-hint {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.curve-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.curve-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+}
+
+.curve-badge.phase-onset {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+.curve-badge.phase-onset .curve-badge-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.curve-badge.phase-peak {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #6ee7b7;
+}
+.curve-badge.phase-peak .curve-badge-dot {
+  background: #34d399;
+  box-shadow: 0 0 10px #34d399;
+  animation: pulseDot 2s infinite;
+}
+
+.curve-badge.phase-maintenance {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #fde68a;
+}
+.curve-badge.phase-maintenance .curve-badge-dot {
+  background: #fbbf24;
+}
+
+.curve-badge.phase-crash {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+.curve-badge.phase-crash .curve-badge-dot {
+  background: #f87171;
+}
+
+.curve-badge.phase-off {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(192, 132, 252, 0.35);
+  color: #d8b4fe;
+}
+.curve-badge.phase-off .curve-badge-dot {
+  background: #c084fc;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.mind-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-mind-checkin {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  color: #f1f5f9;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-mind-checkin:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%);
+  border-color: rgba(167, 139, 250, 0.6);
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+.checkin-battery-mini {
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #cbd5e1;
+}
+
+.btn-daily-notes {
+  position: relative;
+}
+
+.notes-count-badge {
+  background: var(--success);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+/* Modais de Medicação, Check-in e Diário */
+.medication-modal-card {
+  max-width: 560px;
+  width: 100%;
+}
+
+.medication-choice-row {
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.medication-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.venvanse-curve-timeline {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-top: 16px;
+}
+
+.curve-timeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+.curve-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.curve-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.curve-step strong {
+  color: #e2e8f0;
+}
+
+.curve-step-badge {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.curve-step-badge.blue {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+}
+.curve-step-badge.green {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+}
+.curve-step-badge.orange {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+.curve-step-badge.red {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.medication-off-notice {
+  text-align: center;
+  padding: 20px 14px;
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.off-notice-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.medication-off-notice h4 {
+  font-size: 16px;
+  color: #e9d5ff;
+  margin-bottom: 6px;
+}
+
+.medication-off-notice p {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Check-in Modal */
+.checkin-modal-card {
+  max-width: 620px;
+  width: 100%;
+}
+
+.checkin-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin: 14px 0 8px;
+}
+
+.checkin-feelings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.feeling-option input[type="radio"] {
+  display: none;
+}
+
+.feeling-box {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.feeling-box:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--bg-tertiary);
+}
+
+.feeling-option input[type="radio"]:checked + .feeling-box {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.35);
+}
+
+.feeling-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.feeling-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-top: 2px;
+}
+
+.feeling-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.checkin-battery-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-battery {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: #cbd5e1;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-battery:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-battery.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #6ee7b7;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.today-checkins-history {
+  margin-top: 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.today-checkin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+
+.today-checkin-item:last-child {
+  border-bottom: none;
+}
+
+.today-checkin-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-checkin-time {
+  font-family: ui-monospace, monospace;
+  color: #94a3b8;
+}
+
+/* Diário Modal */
+.notes-modal-card {
+  max-width: 580px;
+  width: 100%;
+}
+
+.daily-notes-summary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin-bottom: 14px;
+}
+
+/* Strip Mental no Histórico */
+.history-mind-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.history-reflection-box {
+  background: rgba(139, 92, 246, 0.08);
+  border-left: 3px solid #8b5cf6;
+  padding: 8px 12px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.history-reflection-box strong {
+  color: #c4b5fd;
+  display: block;
+  margin-bottom: 2px;
 }
 
 /* ==========================================
