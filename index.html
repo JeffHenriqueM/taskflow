@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=2.9">
+  <link rel="stylesheet" href="styles.css?v=3.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -67,6 +67,10 @@
             <span>📊 Análise</span>
             <span id="analysisBadge" class="badge-count hidden">0</span>
           </button>
+          <button type="button" id="tabWellness" class="switch-btn">
+            <span>🧘 Bem-Estar</span>
+            <span id="wellnessBadge" class="badge-count hidden">0</span>
+          </button>
         </div>
         <button type="button" id="btnCompleteDay" class="btn btn-finish-day" title="Arquiva o relatório do dia no Histórico e prepara a rotina para o próximo dia">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -100,6 +104,9 @@
         </button>
         <button type="button" class="btn btn-secondary btn-daily-notes" id="btnOpenDailyNotesModal" onclick="openDailyNotesModal()" title="Anotar reflexões do dia e como foi o trabalho/descanso">
           📝 Diário do Dia <span id="lblDailyNotesCount" class="notes-count-badge hidden">✓</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-wellness-shortcut" id="btnOpenWellnessShortcut" onclick="switchToWellnessTab()" title="Abrir Dashboard Semanal de Bem-Estar e Rotina">
+          📈 Dashboard Bem-Estar
         </button>
       </div>
     </section>
@@ -423,6 +430,70 @@
         <!-- List of Analyzed Tasks -->
         <div id="analysisCardsContainer" class="analysis-cards-container">
           <!-- Renderizado dinamicamente -->
+        </div>
+      </section>
+
+      <!-- Wellness View (Rotina, Bem-Estar, Energia & Venvanse) -->
+      <section id="wellnessView" class="wellness-view hidden">
+        <!-- Banner de Modo Folga Inteligente (se hoje for dia de folga) -->
+        <div id="wellnessOffDayBanner" class="wellness-off-banner hidden">
+          <div class="off-banner-icon">🏖️</div>
+          <div class="off-banner-content">
+            <h3>Hoje é o seu Dia Oficial de Folga!</h3>
+            <p>Computador e trabalho devem ser evitados hoje. Prioridade máxima: sair de casa, ir à praia, jogar bola ou descansar sem culpa.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-light" onclick="toggleTodayActivity('beach')">Marquei presença fora de casa ☀️</button>
+        </div>
+
+        <div class="wellness-header">
+          <div class="wellness-header-info">
+            <span class="wellness-header-icon">🧘</span>
+            <div>
+              <h2>Dashboard de Bem-Estar & Saúde Mental</h2>
+              <p class="subtitle">Acompanhe seu ritmo de sono, janela do Venvanse, nível de bateria, consistência de treinos e respeito às folgas.</p>
+            </div>
+          </div>
+          <div class="wellness-header-actions">
+            <button type="button" id="btnOpenWellnessConfig" class="btn btn-secondary btn-sm" onclick="openWellnessConfigModal()">
+              ⚙️ Configurar Escala & Metas
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Activity Logger for Today -->
+        <div class="wellness-today-habits-card">
+          <div class="habits-card-header">
+            <div class="habits-title-group">
+              <span class="habits-icon">⚡</span>
+              <div>
+                <h4>Hábitos & Movimento Corporal de Hoje</h4>
+                <p>Clique para marcar o que você já fez hoje. Isso recalibra seu diagnóstico e a sua energia.</p>
+              </div>
+            </div>
+            <span class="habits-date-tag" id="habitsDateTag">Hoje</span>
+          </div>
+          <div class="habits-pills-grid" id="habitsTodayGrid">
+            <!-- Gerado via JS com botões interativos -->
+          </div>
+        </div>
+
+        <!-- KPI Cards da Semana -->
+        <div class="wellness-kpi-grid" id="wellnessKpiGrid">
+          <!-- Renderizado via JS -->
+        </div>
+
+        <!-- Diagnóstico Sincero da Semana -->
+        <div class="wellness-diagnosis-card" id="wellnessDiagnosisCard">
+          <!-- Renderizado via JS -->
+        </div>
+
+        <!-- Timeline dos Últimos 7 Dias -->
+        <div class="wellness-section-title">
+          <h3>📅 Linha do Tempo dos Últimos 7 Dias</h3>
+          <span class="section-subtitle">Energia, Venvanse, horários de encerramento e atividades físicas</span>
+        </div>
+        <div class="wellness-timeline-grid" id="wellnessTimelineGrid">
+          <!-- Renderizado via JS com cards dos 7 dias -->
         </div>
       </section>
     </main>
@@ -1027,7 +1098,77 @@
     </div>
   </div>
 
+  <!-- Modal: Configuração de Rotina, Folga e Metas -->
+  <div id="wellnessConfigModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card" style="max-width: 520px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+          <span>⚙️</span> Escala de Folgas & Metas de Vida
+        </h2>
+        <button type="button" class="btn-modal-close" onclick="closeWellnessConfigModal()">&times;</button>
+      </div>
+
+      <form id="wellnessConfigForm" onsubmit="handleSaveWellnessConfig(event)">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="cfgWeeklyOffDay">Dia da Folga Regular na Semana:</label>
+          <select id="cfgWeeklyOffDay" class="form-control">
+            <option value="0">Domingo</option>
+            <option value="1">Segunda-feira</option>
+            <option value="2">Terça-feira</option>
+            <option value="3" selected>Quarta-feira</option>
+            <option value="4">Quinta-feira</option>
+            <option value="5">Sexta-feira</option>
+            <option value="6">Sábado</option>
+          </select>
+          <small style="display: block; color: var(--text-dim); font-size: 11px; margin-top: 4px;">Nesse dia, o app ativa o Modo Folga para desestimular trabalho no PC.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="cfgMonthlySundayOff">Domingo de Folga no Mês:</label>
+          <select id="cfgMonthlySundayOff" class="form-control">
+            <option value="1" selected>1º Domingo do Mês</option>
+            <option value="2">2º Domingo do Mês</option>
+            <option value="3">3º Domingo do Mês</option>
+            <option value="4">4º Domingo do Mês</option>
+            <option value="0">Sem domingo fixo</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="cfgPartyDay">Noite de Sair / Balada no Fim de Semana:</label>
+          <select id="cfgPartyDay" class="form-control">
+            <option value="5">Sexta-feira à noite</option>
+            <option value="6" selected>Sábado à noite</option>
+            <option value="none">Não costumo sair</option>
+          </select>
+          <small style="display: block; color: var(--text-dim); font-size: 11px; margin-top: 4px;">O conselheiro libera videogame para espantar o sono antes de sair, sem culpa.</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label for="cfgWorkoutGoal">Meta Semanal de Treinos / Corridas:</label>
+          <select id="cfgWorkoutGoal" class="form-control">
+            <option value="2">2 vezes por semana</option>
+            <option value="3" selected>3 vezes por semana (Recomendado)</option>
+            <option value="4">4 vezes por semana</option>
+            <option value="5">5 vezes por semana</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="cfgShutdownTime">Horário Alvo de Fim de Expediente:</label>
+          <input type="time" id="cfgShutdownTime" class="form-control" value="18:00">
+          <small style="display: block; color: var(--text-dim); font-size: 11px; margin-top: 4px;">Horário em que o Conselheiro trava tarefas de trabalho e sugere vida real.</small>
+        </div>
+
+        <div class="modal-buttons-row" style="margin-top: 20px;">
+          <button type="submit" class="btn btn-primary">Salvar Configuração</button>
+          <button type="button" class="btn btn-secondary" onclick="closeWellnessConfigModal()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=2.9"></script>
+  <script src="app.js?v=3.0"></script>
 </body>
 </html>

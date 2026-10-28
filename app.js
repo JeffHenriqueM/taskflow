@@ -222,6 +222,23 @@ const analysisCategorySelect = document.getElementById('analysisCategorySelect')
 const analysisSeveritySelect = document.getElementById('analysisSeveritySelect');
 const analysisSortSelect = document.getElementById('analysisSortSelect');
 
+// Elementos da Aba de Bem-Estar e Rotina
+const tabWellness = document.getElementById('tabWellness');
+const wellnessBadge = document.getElementById('wellnessBadge');
+const wellnessView = document.getElementById('wellnessView');
+const wellnessOffDayBanner = document.getElementById('wellnessOffDayBanner');
+const habitsTodayGrid = document.getElementById('habitsTodayGrid');
+const wellnessKpiGrid = document.getElementById('wellnessKpiGrid');
+const wellnessDiagnosisCard = document.getElementById('wellnessDiagnosisCard');
+const wellnessTimelineGrid = document.getElementById('wellnessTimelineGrid');
+const wellnessConfigModal = document.getElementById('wellnessConfigModal');
+const wellnessConfigForm = document.getElementById('wellnessConfigForm');
+const cfgWeeklyOffDay = document.getElementById('cfgWeeklyOffDay');
+const cfgMonthlySundayOff = document.getElementById('cfgMonthlySundayOff');
+const cfgPartyDay = document.getElementById('cfgPartyDay');
+const cfgWorkoutGoal = document.getElementById('cfgWorkoutGoal');
+const cfgShutdownTime = document.getElementById('cfgShutdownTime');
+
 const taskFormCard = document.getElementById('taskFormCard');
 const taskFormHeader = document.getElementById('taskFormHeader');
 const btnToggleTaskForm = document.getElementById('btnToggleTaskForm');
@@ -358,6 +375,28 @@ let isScreenBreakPaused = false;
 const MIND_JOURNAL_STORAGE_KEY = 'taskflow_mind_journal_v1';
 let mindJournal = {};
 
+// Perfil de Bem-Estar e Rotina Pessoal
+const WELLNESS_PROFILE_KEY = 'taskflow_wellness_profile_v1';
+const DEFAULT_WELLNESS_PROFILE = {
+  weeklyOffDay: 3, // 3 = Quarta (1x na semana)
+  monthlySundayOff: 1, // 1º domingo do mês
+  partyDay: 6, // 6 = Sábado à noite (ou 5 = Sexta)
+  workoutGoal: 3, // Meta de 3 treinos por semana
+  shutdownTime: '18:00'
+};
+let wellnessProfile = Object.assign({}, DEFAULT_WELLNESS_PROFILE);
+
+const WELLNESS_HABITS_LIST = [
+  { id: 'running', icon: '🏃‍♂️', label: 'Corrida (20-30 min)' },
+  { id: 'workout', icon: '💪', label: 'Treino em Casa (Calistenia)' },
+  { id: 'soccer', icon: '⚽', label: 'Futebol' },
+  { id: 'beach', icon: '🏖️', label: 'Praia / Ar Livre' },
+  { id: 'nutrition', icon: '🍽️', label: 'Refeição de Verdade' },
+  { id: 'water', icon: '💧', label: 'Bebi 2L+ de Água' },
+  { id: 'videogame', icon: '🎮', label: 'Videogame (Vigília Balada)' },
+  { id: 'offscreen', icon: '🛋️', label: 'Desconectei Sem Telas' }
+];
+
 const lblMedicationStatus = document.getElementById('lblMedicationStatus');
 const lblCurveBadge = document.getElementById('lblCurveBadge');
 const lblCurveBadgeText = document.getElementById('lblCurveBadgeText');
@@ -445,6 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateRandomCategoryOptions();
   render();
   renderHistory();
+  checkAndDisplayOffDayBanner();
   startGlobalTicker();
   initSupabase();
 });
@@ -515,6 +555,11 @@ function updateDateDisplay() {
       const monitored = tasks.filter(t => !!t.includeInAnalysis);
       currentDaySubtitle.textContent = `${monitored.length} de ${tasks.length} tarefas selecionadas para monitoramento`;
     }
+  } else if (activeTab === 'wellness') {
+    if (currentDayTitle) currentDayTitle.textContent = '🧘 Dashboard de Bem-Estar & Saúde Mental';
+    if (currentDaySubtitle) {
+      currentDaySubtitle.textContent = 'Baterias mentais, janela do Venvanse e hábitos de vida dos últimos 7 dias';
+    }
   } else {
     const todayKey = getTodayDateKey();
     if (currentDayTitle) currentDayTitle.textContent = formatDateDisplay(todayKey);
@@ -538,6 +583,16 @@ function loadData() {
     mindJournal = rawMind ? JSON.parse(rawMind) : {};
   } catch (e) {
     mindJournal = {};
+  }
+
+  // Carrega Perfil de Bem-Estar e Rotina Pessoal
+  try {
+    const rawWellness = localStorage.getItem(WELLNESS_PROFILE_KEY);
+    if (rawWellness) {
+      wellnessProfile = Object.assign({}, DEFAULT_WELLNESS_PROFILE, JSON.parse(rawWellness));
+    }
+  } catch (e) {
+    wellnessProfile = Object.assign({}, DEFAULT_WELLNESS_PROFILE);
   }
 
   // Carrega estado de tarefas recolhidas (collapsed)
@@ -657,10 +712,19 @@ function saveMindJournal() {
   }
 }
 
+function saveWellnessProfile() {
+  try {
+    localStorage.setItem(WELLNESS_PROFILE_KEY, JSON.stringify(wellnessProfile));
+  } catch (e) {
+    console.error('Erro ao salvar perfil de bem-estar:', e);
+  }
+}
+
 function saveData() {
   saveTasks();
   saveHistory();
   saveMindJournal();
+  saveWellnessProfile();
   localStorage.setItem(ACTIVE_DATE_KEY, activeDate);
 }
 
@@ -1101,7 +1165,7 @@ function setupEventListeners() {
   }
 }
 
-// Alternância entre Hoje, Histórico e Análise
+// Alternância entre Hoje, Histórico, Análise e Bem-Estar
 function setupTabSwitching() {
   if (tabToday) {
     tabToday.addEventListener('click', () => {
@@ -1109,9 +1173,11 @@ function setupTabSwitching() {
       tabToday.classList.add('active');
       tabHistory.classList.remove('active');
       if (tabAnalysis) tabAnalysis.classList.remove('active');
+      if (tabWellness) tabWellness.classList.remove('active');
       if (todayView) todayView.classList.remove('hidden');
       if (historyView) historyView.classList.add('hidden');
       if (analysisView) analysisView.classList.add('hidden');
+      if (wellnessView) wellnessView.classList.add('hidden');
       if (btnCompleteDay) btnCompleteDay.style.display = 'inline-flex';
       updateDateDisplay();
       render();
@@ -1124,9 +1190,11 @@ function setupTabSwitching() {
       tabHistory.classList.add('active');
       tabToday.classList.remove('active');
       if (tabAnalysis) tabAnalysis.classList.remove('active');
+      if (tabWellness) tabWellness.classList.remove('active');
       if (todayView) todayView.classList.add('hidden');
       if (historyView) historyView.classList.remove('hidden');
       if (analysisView) analysisView.classList.add('hidden');
+      if (wellnessView) wellnessView.classList.add('hidden');
       if (btnCompleteDay) btnCompleteDay.style.display = 'none';
       updateDateDisplay();
       updateMetrics();
@@ -1140,14 +1208,39 @@ function setupTabSwitching() {
       tabAnalysis.classList.add('active');
       tabToday.classList.remove('active');
       tabHistory.classList.remove('active');
+      if (tabWellness) tabWellness.classList.remove('active');
       if (todayView) todayView.classList.add('hidden');
       if (historyView) historyView.classList.add('hidden');
       if (analysisView) analysisView.classList.remove('hidden');
+      if (wellnessView) wellnessView.classList.add('hidden');
       if (btnCompleteDay) btnCompleteDay.style.display = 'none';
       updateDateDisplay();
       updateMetrics();
       renderAnalysis();
     });
+  }
+
+  if (tabWellness) {
+    tabWellness.addEventListener('click', () => {
+      activeTab = 'wellness';
+      tabWellness.classList.add('active');
+      tabToday.classList.remove('active');
+      tabHistory.classList.remove('active');
+      if (tabAnalysis) tabAnalysis.classList.remove('active');
+      if (todayView) todayView.classList.add('hidden');
+      if (historyView) historyView.classList.add('hidden');
+      if (analysisView) analysisView.classList.add('hidden');
+      if (wellnessView) wellnessView.classList.remove('hidden');
+      if (btnCompleteDay) btnCompleteDay.style.display = 'none';
+      updateDateDisplay();
+      renderWellnessDashboard();
+    });
+  }
+}
+
+function switchToWellnessTab() {
+  if (tabWellness) {
+    tabWellness.click();
   }
 }
 
@@ -2901,6 +2994,443 @@ window.handleSaveMoodCheckin = handleSaveMoodCheckin;
 window.openDailyNotesModal = openDailyNotesModal;
 window.closeDailyNotesModal = closeDailyNotesModal;
 window.handleSaveDailyNotes = handleSaveDailyNotes;
+
+// ==========================================
+// MÓDULO: DASHBOARD DE BEM-ESTAR & ROTINA SEMANAL
+// ==========================================
+
+function formatTimeHM(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function openWellnessConfigModal() {
+  if (cfgWeeklyOffDay) cfgWeeklyOffDay.value = String(wellnessProfile.weeklyOffDay);
+  if (cfgMonthlySundayOff) cfgMonthlySundayOff.value = String(wellnessProfile.monthlySundayOff);
+  if (cfgPartyDay) cfgPartyDay.value = String(wellnessProfile.partyDay);
+  if (cfgWorkoutGoal) cfgWorkoutGoal.value = String(wellnessProfile.workoutGoal || 3);
+  if (cfgShutdownTime) cfgShutdownTime.value = wellnessProfile.shutdownTime || '18:00';
+
+  if (wellnessConfigModal) wellnessConfigModal.classList.remove('hidden');
+}
+
+function closeWellnessConfigModal() {
+  if (wellnessConfigModal) wellnessConfigModal.classList.add('hidden');
+}
+
+function handleSaveWellnessConfig(e) {
+  if (e) e.preventDefault();
+
+  wellnessProfile.weeklyOffDay = cfgWeeklyOffDay ? Number(cfgWeeklyOffDay.value) : 3;
+  wellnessProfile.monthlySundayOff = cfgMonthlySundayOff ? Number(cfgMonthlySundayOff.value) : 1;
+  wellnessProfile.partyDay = cfgPartyDay ? cfgPartyDay.value : '6';
+  wellnessProfile.workoutGoal = cfgWorkoutGoal ? Number(cfgWorkoutGoal.value) : 3;
+  wellnessProfile.shutdownTime = cfgShutdownTime ? cfgShutdownTime.value : '18:00';
+
+  saveWellnessProfile();
+  closeWellnessConfigModal();
+  checkAndDisplayOffDayBanner();
+  renderWellnessDashboard();
+}
+
+function checkAndDisplayOffDayBanner() {
+  if (!wellnessOffDayBanner) return;
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const dateNum = now.getDate();
+  const isWeeklyOff = (dayOfWeek === Number(wellnessProfile.weeklyOffDay));
+
+  let isSundayOff = false;
+  if (dayOfWeek === 0 && wellnessProfile.monthlySundayOff > 0) {
+    const sundayIndex = Math.ceil(dateNum / 7);
+    isSundayOff = (sundayIndex === Number(wellnessProfile.monthlySundayOff));
+  }
+
+  if (isWeeklyOff || isSundayOff) {
+    wellnessOffDayBanner.classList.remove('hidden');
+  } else {
+    wellnessOffDayBanner.classList.add('hidden');
+  }
+}
+
+function toggleTodayActivity(activityId) {
+  const currentMind = getCurrentDayMind();
+  currentMind.activities = currentMind.activities || [];
+  const idx = currentMind.activities.indexOf(activityId);
+  if (idx >= 0) {
+    currentMind.activities.splice(idx, 1);
+  } else {
+    currentMind.activities.push(activityId);
+  }
+
+  saveMindJournal();
+  renderWellnessDashboard();
+  updateMindTrackerBar();
+}
+
+function computeWeeklyWellnessStats() {
+  const daysData = [];
+  const todayKey = getTodayDateKey();
+  const now = new Date();
+
+  let totalBatterySum = 0;
+  let totalBatteryCheckinsCount = 0;
+  let venvanseMinutesSum = 0;
+  let venvanseDaysCount = 0;
+  let closedOnTimeCount = 0;
+  let totalTrackedDays = 0;
+  let workoutDaysCount = 0;
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateKey = `${y}-${m}-${day}`;
+    const isToday = (i === 0);
+
+    const histItem = dailyHistory[dateKey];
+    const mindItem = mindJournal[dateKey] || (histItem && histItem.mindJournal) || {
+      medication: { taken: null, time: '', dosage: '' },
+      checkins: [],
+      dailyNotes: '',
+      activities: []
+    };
+
+    const dayOfWeek = d.getDay();
+    const isConfiguredOffDay = (dayOfWeek === Number(wellnessProfile.weeklyOffDay));
+    const isConfiguredPartyDay = (wellnessProfile.partyDay !== 'none' && dayOfWeek === Number(wellnessProfile.partyDay));
+
+    // Bateria do dia
+    const checkins = mindItem.checkins || [];
+    let avgBattery = null;
+    if (checkins.length > 0) {
+      const dayBatterySum = checkins.reduce((acc, c) => acc + (Number(c.battery) || 100), 0);
+      avgBattery = Math.round(dayBatterySum / checkins.length);
+      totalBatterySum += avgBattery;
+      totalBatteryCheckinsCount++;
+    } else if (isToday) {
+      avgBattery = 100;
+      totalBatterySum += 100;
+      totalBatteryCheckinsCount++;
+    }
+
+    // Venvanse
+    const med = mindItem.medication || {};
+    let medTimeStr = '';
+    if (med.taken === true && med.time) {
+      medTimeStr = med.time;
+      const [hh, mm] = med.time.split(':').map(Number);
+      const medMinutes = hh * 60 + (mm || 0);
+      venvanseMinutesSum += medMinutes;
+      venvanseDaysCount++;
+    }
+
+    // Fechamento / Horário
+    let closedHourStr = '';
+    let closedOnTime = false;
+    let totalSecondsWorked = 0;
+
+    if (histItem && histItem.closedAt) {
+      const closedDate = new Date(histItem.closedAt);
+      const ch = String(closedDate.getHours()).padStart(2, '0');
+      const cm = String(closedDate.getMinutes()).padStart(2, '0');
+      closedHourStr = `${ch}:${cm}`;
+      totalSecondsWorked = histItem.totalSeconds || 0;
+      if (closedDate.getHours() < 18 || (closedDate.getHours() === 18 && closedDate.getMinutes() <= 30)) {
+        closedOnTime = true;
+        closedOnTimeCount++;
+      }
+      totalTrackedDays++;
+    } else if (isToday) {
+      totalSecondsWorked = tasks.reduce((acc, t) => acc + (t.elapsedSeconds || 0), 0);
+      const curHour = now.getHours();
+      const curMin = now.getMinutes();
+      closedHourStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')} (Hoje)`;
+      if (curHour < 18 || (curHour === 18 && curMin <= 30)) {
+        closedOnTime = true;
+      }
+    }
+
+    // Atividades físicas do dia
+    const activities = mindItem.activities || [];
+    const hasWorkout = activities.some(a => ['running', 'workout', 'soccer'].includes(a));
+    if (hasWorkout) {
+      workoutDaysCount++;
+    }
+
+    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    daysData.push({
+      dateKey,
+      dateObj: d,
+      isToday,
+      dayOfWeek,
+      weekdayDisplay: weekdayNames[dayOfWeek],
+      dateDisplay: `${day}/${m}`,
+      isConfiguredOffDay,
+      isConfiguredPartyDay,
+      mindItem,
+      histItem,
+      avgBattery,
+      med,
+      medTimeStr,
+      closedHourStr,
+      closedOnTime,
+      totalSecondsWorked,
+      activities,
+      checkins
+    });
+  }
+
+  const weeklyAvgBattery = totalBatteryCheckinsCount > 0 ? Math.round(totalBatterySum / totalBatteryCheckinsCount) : 100;
+
+  let avgVenvanseTimeStr = '--:--';
+  let isEarlyVenvanse = false;
+  let isGoodVenvanse = false;
+  if (venvanseDaysCount > 0) {
+    const avgMinutes = Math.round(venvanseMinutesSum / venvanseDaysCount);
+    const avgH = Math.floor(avgMinutes / 60);
+    const avgM = avgMinutes % 60;
+    avgVenvanseTimeStr = `${String(avgH).padStart(2, '0')}:${String(avgM).padStart(2, '0')}`;
+    if (avgMinutes < 390) {
+      isEarlyVenvanse = true;
+    } else if (avgMinutes >= 420 && avgMinutes <= 540) {
+      isGoodVenvanse = true;
+    }
+  }
+
+  return {
+    daysData,
+    weeklyAvgBattery,
+    avgVenvanseTimeStr,
+    isEarlyVenvanse,
+    isGoodVenvanse,
+    closedOnTimeCount,
+    totalTrackedDays: Math.max(totalTrackedDays, 1),
+    workoutDaysCount,
+    workoutGoal: Number(wellnessProfile.workoutGoal) || 3
+  };
+}
+
+function renderWellnessDashboard() {
+  checkAndDisplayOffDayBanner();
+
+  const currentMind = getCurrentDayMind();
+  const currentActivities = currentMind.activities || [];
+
+  // 1. Hábitos de Hoje
+  if (habitsTodayGrid) {
+    habitsTodayGrid.innerHTML = WELLNESS_HABITS_LIST.map(h => {
+      const active = currentActivities.includes(h.id);
+      return `
+        <button type="button" class="habit-btn ${active ? 'active' : ''}" onclick="toggleTodayActivity('${h.id}')" title="Clique para alternar">
+          <span>${h.icon}</span>
+          <span>${h.label}</span>
+          <span class="habit-check-icon">✓</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // 2. Calcula estatísticas da semana
+  const stats = computeWeeklyWellnessStats();
+
+  // 3. Renderiza KPIs
+  if (wellnessKpiGrid) {
+    let batteryBadgeClass = 'badge-success';
+    let batteryBadgeText = '🔋 Energia Estável';
+    if (stats.weeklyAvgBattery < 50) {
+      batteryBadgeClass = 'badge-warning';
+      batteryBadgeText = '⚠️ Bateria Baixa';
+    } else if (stats.weeklyAvgBattery < 70) {
+      batteryBadgeClass = 'badge-info';
+      batteryBadgeText = '⚡ Fadiga Leve';
+    }
+
+    let venvanseBadgeClass = 'badge-info';
+    let venvanseBadgeText = 'Janela a calibrar';
+    if (stats.isEarlyVenvanse) {
+      venvanseBadgeClass = 'badge-warning';
+      venvanseBadgeText = '⚠️ Muito Cedo (05h)';
+    } else if (stats.isGoodVenvanse) {
+      venvanseBadgeClass = 'badge-success';
+      venvanseBadgeText = '✅ Janela de Ouro';
+    }
+
+    const workoutPercent = Math.min(100, Math.round((stats.workoutDaysCount / stats.workoutGoal) * 100));
+    let workoutBadgeClass = workoutPercent >= 100 ? 'badge-success' : 'badge-info';
+    let workoutBadgeText = workoutPercent >= 100 ? '🔥 Meta Cumprida!' : `${workoutPercent}% da meta`;
+
+    wellnessKpiGrid.innerHTML = `
+      <div class="wellness-kpi-card">
+        <div class="wellness-kpi-top">
+          <span class="wellness-kpi-label">Bateria Mental Média</span>
+          <span class="wellness-kpi-icon">🧠</span>
+        </div>
+        <div class="wellness-kpi-value">${stats.weeklyAvgBattery}%</div>
+        <div class="wellness-kpi-badge ${batteryBadgeClass}">${batteryBadgeText}</div>
+      </div>
+
+      <div class="wellness-kpi-card">
+        <div class="wellness-kpi-top">
+          <span class="wellness-kpi-label">Horário Médio Venvanse</span>
+          <span class="wellness-kpi-icon">💊</span>
+        </div>
+        <div class="wellness-kpi-value">${stats.avgVenvanseTimeStr}</div>
+        <div class="wellness-kpi-badge ${venvanseBadgeClass}">${venvanseBadgeText}</div>
+      </div>
+
+      <div class="wellness-kpi-card">
+        <div class="wellness-kpi-top">
+          <span class="wellness-kpi-label">Treinos & Corridas</span>
+          <span class="wellness-kpi-icon">🏃‍♂️</span>
+        </div>
+        <div class="wellness-kpi-value">${stats.workoutDaysCount} / ${stats.workoutGoal} dias</div>
+        <div class="wellness-kpi-badge ${workoutBadgeClass}">${workoutBadgeText}</div>
+      </div>
+
+      <div class="wellness-kpi-card">
+        <div class="wellness-kpi-top">
+          <span class="wellness-kpi-label">Fim de Expediente Saudável</span>
+          <span class="wellness-kpi-icon">🌙</span>
+        </div>
+        <div class="wellness-kpi-value">${stats.closedOnTimeCount} dias</div>
+        <div class="wellness-kpi-badge badge-success">Antes das 18:30</div>
+      </div>
+    `;
+  }
+
+  // 4. Renderiza Diagnóstico Sincero da Semana
+  if (wellnessDiagnosisCard) {
+    const points = [];
+    if (stats.isEarlyVenvanse) {
+      points.push(`<strong>⏰ Horário do Venvanse (${stats.avgVenvanseTimeStr}):</strong> Sua média está em torno das 05h da manhã. O pico acaba antes do meio da tarde e você fica esgotado às 17h30. Amanhã, teste tomar às <strong>07:30 – 08:00</strong> após um café da manhã reforçado com proteína!`);
+    } else if (stats.isGoodVenvanse) {
+      points.push(`<strong>🎯 Horário do Venvanse (${stats.avgVenvanseTimeStr}):</strong> Excelente! Tomando entre 07h e 08h30 você aproveita o pico biológico bem no meio do trabalho e desliga naturalmente à noite.`);
+    }
+
+    if (stats.workoutDaysCount >= stats.workoutGoal) {
+      points.push(`<strong>🔥 Movimento Físico (${stats.workoutDaysCount}/${stats.workoutGoal} metas):</strong> Parabéns! Você atingiu sua meta de treinos/corridas na semana. Isso limpa a adrenalina residual e preserva sua saúde.`);
+    } else {
+      points.push(`<strong>🏃‍♂️ Começar a Correr & Treinar (${stats.workoutDaysCount}/${stats.workoutGoal}):</strong> Faltam ${stats.workoutGoal - stats.workoutDaysCount} sessão(ões). Lembre-se: não precisa ser 1 hora. 20 minutos de corrida na rua ou calistenia em casa no fim da tarde já transformam o seu cérebro.`);
+    }
+
+    points.push(`<strong>🛋️ Vício em Trabalho & Folgas:</strong> O trabalho não é a única coisa na vida. Lembre-se de reservar suas folgas para futebol, praia e desligamento total de telas.`);
+
+    wellnessDiagnosisCard.innerHTML = `
+      <div class="wellness-diagnosis-header">
+        <span style="font-size: 22px;">💡</span>
+        <h4>Diagnóstico Sincero da Sua Rotina Semanal</h4>
+      </div>
+      <div class="wellness-diagnosis-body">
+        ${points.map(p => `<p style="margin: 0 0 8px 0;">${p}</p>`).join('')}
+      </div>
+    `;
+  }
+
+  // 5. Linha do Tempo dos Últimos 7 Dias
+  if (wellnessTimelineGrid) {
+    wellnessTimelineGrid.innerHTML = stats.daysData.map(d => {
+      let batteryClass = 'battery-fill-green';
+      const bVal = d.avgBattery !== null ? d.avgBattery : 100;
+      if (bVal < 50) batteryClass = 'battery-fill-red';
+      else if (bVal < 70) batteryClass = 'battery-fill-amber';
+
+      let tagsHtml = '';
+      if (d.isToday) tagsHtml += `<span class="day-tag tag-today">Hoje</span>`;
+      if (d.isConfiguredOffDay) tagsHtml += `<span class="day-tag tag-off">Folga</span>`;
+      if (d.isConfiguredPartyDay) tagsHtml += `<span class="day-tag tag-party">Balada</span>`;
+
+      let medText = '💊 Não registrado';
+      if (d.med && d.med.taken === true && d.med.time) {
+        medText = `💊 ${d.med.time}${d.med.dosage ? ` (${d.med.dosage})` : ''}`;
+      } else if (d.med && d.med.taken === false) {
+        medText = '🛋️ Pausa / Descanso';
+      }
+
+      const hoursWorkedStr = formatTimeHM(d.totalSecondsWorked || 0);
+
+      const actHtml = (d.activities && d.activities.length > 0)
+        ? `
+          <div class="day-activities-chips">
+            ${d.activities.map(actId => {
+              const hObj = WELLNESS_HABITS_LIST.find(x => x.id === actId);
+              return hObj ? `<span class="day-activity-chip">${hObj.icon} ${hObj.label.split(' ')[0]}</span>` : '';
+            }).join('')}
+          </div>
+        `
+        : '';
+
+      const feelingsHtml = (d.checkins && d.checkins.length > 0)
+        ? `
+          <div class="day-feelings-chips">
+            ${d.checkins.slice(0, 3).map(c => `
+              <span class="day-feeling-chip">${getFeelingEmoji(c.feeling)} ${escapeHtml(c.feelingName || getFeelingName(c.feeling))}</span>
+            `).join('')}
+          </div>
+        `
+        : '';
+
+      const notesPreview = (d.mindItem && d.mindItem.dailyNotes)
+        ? `<div class="day-notes-preview">"${escapeHtml(d.mindItem.dailyNotes.slice(0, 75))}${d.mindItem.dailyNotes.length > 75 ? '...' : ''}"</div>`
+        : '';
+
+      return `
+        <div class="wellness-day-card ${d.isToday ? 'is-today' : ''}">
+          <div class="day-card-header">
+            <div class="day-card-date-col">
+              <span class="day-card-weekday">${d.weekdayDisplay}</span>
+              <span class="day-card-date-sub">${d.dateDisplay}</span>
+            </div>
+            <div class="day-card-tags">
+              ${tagsHtml}
+            </div>
+          </div>
+
+          <div class="day-battery-section">
+            <div class="day-battery-labels">
+              <span>Bateria Mental</span>
+              <strong style="color: #fff;">${bVal}%</strong>
+            </div>
+            <div class="day-battery-track">
+              <div class="day-battery-fill ${batteryClass}" style="width: ${bVal}%;"></div>
+            </div>
+          </div>
+
+          <div class="day-metrics-row">
+            <div class="day-metric-item">
+              <span>Remédio:</span>
+              <strong>${medText}</strong>
+            </div>
+            <div class="day-metric-item">
+              <span>Tempo de Tela:</span>
+              <strong>${hoursWorkedStr}</strong>
+            </div>
+            <div class="day-metric-item">
+              <span>Encerramento:</span>
+              <strong style="color: ${d.closedOnTime ? '#34d399' : '#fbbf24'};">${d.closedHourStr || '--:--'}</strong>
+            </div>
+          </div>
+
+          ${actHtml}
+          ${feelingsHtml}
+          ${notesPreview}
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+window.openWellnessConfigModal = openWellnessConfigModal;
+window.closeWellnessConfigModal = closeWellnessConfigModal;
+window.handleSaveWellnessConfig = handleSaveWellnessConfig;
+window.toggleTodayActivity = toggleTodayActivity;
+window.switchToWellnessTab = switchToWellnessTab;
+window.renderWellnessDashboard = renderWellnessDashboard;
 
 // Configuração e Alteração da Duração da Tarefa
 function openTimerConfig(taskId, e) {
