@@ -239,6 +239,23 @@ const cfgPartyDay = document.getElementById('cfgPartyDay');
 const cfgWorkoutGoal = document.getElementById('cfgWorkoutGoal');
 const cfgShutdownTime = document.getElementById('cfgShutdownTime');
 
+// Proteção Ocular e Modo Folga Radical
+let continuousFocusSeconds = 0;
+let eyeRestInterval = null;
+let eyeRestRemainingSeconds = 20;
+let isEyeRestActive = false;
+let emergencyWorkAllowed = false;
+let pendingOffDayTaskId = null;
+let pendingOffDaySubtaskId = null;
+
+const eyeRest20Toast = document.getElementById('eyeRest20Toast');
+const eyeRestProgressBar = document.getElementById('eyeRestProgressBar');
+const eyeRestSecondsCount = document.getElementById('eyeRestSecondsCount');
+const eyeRestDescription = document.getElementById('eyeRestDescription');
+const btnEyeRestConfirm = document.getElementById('btnEyeRestConfirm');
+const offDayWorkConfirmModal = document.getElementById('offDayWorkConfirmModal');
+const offDayRadicalCard = document.getElementById('offDayRadicalCard');
+
 const taskFormCard = document.getElementById('taskFormCard');
 const taskFormHeader = document.getElementById('taskFormHeader');
 const btnToggleTaskForm = document.getElementById('btnToggleTaskForm');
@@ -1585,6 +1602,15 @@ function getTaskCurrentSeconds(task) {
 
 // Controle do Timer (Blocos Pomodoro)
 function startTimer(taskId) {
+  // Trava de Folga Radical: bloqueia início de trabalho em dias de descanso oficial
+  if (isCurrentDayOff() && !emergencyWorkAllowed) {
+    pendingOffDayTaskId = taskId;
+    const task = tasks.find(t => t.id === taskId);
+    pendingOffDaySubtaskId = task ? task.activeSubtaskId : null;
+    openOffDayWorkConfirmModal();
+    return;
+  }
+
   requestNotificationPermission();
   const now = Date.now();
   
@@ -3036,8 +3062,7 @@ function handleSaveWellnessConfig(e) {
   renderWellnessDashboard();
 }
 
-function checkAndDisplayOffDayBanner() {
-  if (!wellnessOffDayBanner) return;
+function isCurrentDayOff() {
   const now = new Date();
   const dayOfWeek = now.getDay();
   const dateNum = now.getDate();
@@ -3049,10 +3074,33 @@ function checkAndDisplayOffDayBanner() {
     isSundayOff = (sundayIndex === Number(wellnessProfile.monthlySundayOff));
   }
 
-  if (isWeeklyOff || isSundayOff) {
-    wellnessOffDayBanner.classList.remove('hidden');
-  } else {
-    wellnessOffDayBanner.classList.add('hidden');
+  return isWeeklyOff || isSundayOff;
+}
+
+function checkAndDisplayOffDayBanner() {
+  const isOffDay = isCurrentDayOff();
+
+  if (wellnessOffDayBanner) {
+    if (isOffDay) wellnessOffDayBanner.classList.remove('hidden');
+    else wellnessOffDayBanner.classList.add('hidden');
+  }
+
+  const offRadicalCard = document.getElementById('offDayRadicalCard');
+  if (offRadicalCard) {
+    if (isOffDay) {
+      offRadicalCard.classList.remove('hidden');
+      renderLifeChecklist();
+      const taskFormEl = document.getElementById('taskFormCard');
+      if (taskFormEl && !emergencyWorkAllowed) {
+        taskFormEl.classList.add('hidden');
+      }
+    } else {
+      offRadicalCard.classList.add('hidden');
+      const taskFormEl = document.getElementById('taskFormCard');
+      if (taskFormEl) {
+        taskFormEl.classList.remove('hidden');
+      }
+    }
   }
 }
 
@@ -3425,12 +3473,202 @@ function renderWellnessDashboard() {
   }
 }
 
+// ==========================================
+// MÓDULO: PROTEÇÃO OCULAR 20-20-20 & MODO FOLGA RADICAL
+// ==========================================
+
+const OFF_DAY_LIFE_TASKS = [
+  { id: 'soccer', icon: '⚽', title: 'Jogar futebol ou assistir uma partida', desc: 'Respire adrenalina de jogo e socialização com os amigos.' },
+  { id: 'beach', icon: '🏖️', title: 'Ir à praia e pegar um ar fresco', desc: 'Sair de casa, ver o mar e desconectar 100% das telas.' },
+  { id: 'running', icon: '🏃‍♂️', title: 'Corrida ou caminhada leve na orla', desc: 'Sem pressão de meta: só botar o tênis e suar um pouco.' },
+  { id: 'videogame', icon: '🎮', title: 'Jogar videogame sem culpa', desc: 'Lazer e diversão de verdade. Trabalho hoje não existe.' },
+  { id: 'decor', icon: '🔨', title: 'Cuidar do quarto / casa (ex: placas 3D, arrumação)', desc: 'Trabalho manual e ambiente renovado.' },
+  { id: 'food', icon: '🍽️', title: 'Comer algo gostoso e caprichado', desc: 'Almoço ou jantar de verdade, sem pressa.' },
+  { id: 'nap', icon: '🛋️', title: 'Tirar um cochilo ou relaxar pernas pro ar', desc: 'Descanso real para recarregar sua criatividade.' }
+];
+
+function renderLifeChecklist() {
+  const currentMind = getCurrentDayMind();
+  const lifeTasksState = currentMind.lifeTasks || {};
+  const container = document.getElementById('lifeTasksGrid');
+  const progressEl = document.getElementById('lifeChecklistProgress');
+
+  let completedCount = 0;
+  OFF_DAY_LIFE_TASKS.forEach(t => {
+    if (lifeTasksState[t.id]) completedCount++;
+  });
+
+  if (progressEl) {
+    progressEl.textContent = `${completedCount} de ${OFF_DAY_LIFE_TASKS.length} aproveitados hoje!`;
+  }
+
+  if (container) {
+    container.innerHTML = OFF_DAY_LIFE_TASKS.map(item => {
+      const isDone = !!lifeTasksState[item.id];
+      return `
+        <div class="life-task-card ${isDone ? 'completed' : ''}" onclick="toggleLifeTask('${item.id}')">
+          <div class="life-task-checkbox">
+            ${isDone ? '✓' : ''}
+          </div>
+          <span style="font-size: 24px; line-height: 1;">${item.icon}</span>
+          <div class="life-task-info">
+            <span class="life-task-title">${item.title}</span>
+            <span class="life-task-desc">${item.desc}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function toggleLifeTask(taskId) {
+  const currentMind = getCurrentDayMind();
+  currentMind.lifeTasks = currentMind.lifeTasks || {};
+  currentMind.lifeTasks[taskId] = !currentMind.lifeTasks[taskId];
+  saveMindJournal();
+  renderLifeChecklist();
+}
+
+function toggleEmergencyWorkMode() {
+  emergencyWorkAllowed = !emergencyWorkAllowed;
+  const btn = document.getElementById('btnToggleEmergencyWork');
+  if (btn) {
+    btn.textContent = emergencyWorkAllowed ? '🔒 Reativar Bloqueio de Folga' : '⚠️ Liberar Trabalho de Emergência';
+    btn.className = emergencyWorkAllowed ? 'btn btn-sm btn-outline-light' : 'btn btn-sm btn-outline-warning';
+  }
+  const taskFormEl = document.getElementById('taskFormCard');
+  if (taskFormEl) {
+    if (emergencyWorkAllowed) taskFormEl.classList.remove('hidden');
+    else taskFormEl.classList.add('hidden');
+  }
+}
+
+function openOffDayWorkConfirmModal() {
+  const modal = document.getElementById('offDayWorkConfirmModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeOffDayWorkConfirmModal() {
+  const modal = document.getElementById('offDayWorkConfirmModal');
+  if (modal) modal.classList.add('hidden');
+  pendingOffDayTaskId = null;
+  pendingOffDaySubtaskId = null;
+}
+
+function confirmEmergencyWorkOverride() {
+  emergencyWorkAllowed = true;
+  const taskId = pendingOffDayTaskId;
+  const subtaskId = pendingOffDaySubtaskId;
+  closeOffDayWorkConfirmModal();
+
+  const btn = document.getElementById('btnToggleEmergencyWork');
+  if (btn) {
+    btn.textContent = '🔒 Reativar Bloqueio de Folga';
+    btn.className = 'btn btn-sm btn-outline-light';
+  }
+  const taskFormEl = document.getElementById('taskFormCard');
+  if (taskFormEl) taskFormEl.classList.remove('hidden');
+
+  if (subtaskId && taskId) {
+    startSubtaskTimer(taskId, subtaskId);
+  } else if (taskId) {
+    startTimer(taskId);
+  }
+}
+
+function focusLifeChecklist() {
+  const card = document.getElementById('offDayRadicalCard');
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function triggerEyeRest20(isManual = false) {
+  if (isEyeRestActive) return;
+  isEyeRestActive = true;
+  eyeRestRemainingSeconds = 20;
+
+  if (eyeRestProgressBar) {
+    eyeRestProgressBar.style.width = '0%';
+    eyeRestProgressBar.classList.remove('done');
+  }
+  if (eyeRestSecondsCount) {
+    eyeRestSecondsCount.textContent = '20s';
+  }
+  if (eyeRestDescription) {
+    eyeRestDescription.textContent = isManual
+      ? 'Pausa solicitada: olhe para um ponto distante a 6 metros (pela janela) e pisque 10 vezes devagar!'
+      : 'Você está há 20 min focado na tela. Olhe para a janela ou um ponto a 6 metros e pisque 10 vezes devagar!';
+  }
+  if (btnEyeRestConfirm) {
+    btnEyeRestConfirm.textContent = 'Pisquei & Descansei ✓';
+    btnEyeRestConfirm.disabled = false;
+  }
+
+  if (eyeRest20Toast) {
+    eyeRest20Toast.classList.remove('hidden');
+  }
+
+  if (eyeRestInterval) clearInterval(eyeRestInterval);
+  eyeRestInterval = setInterval(() => {
+    eyeRestRemainingSeconds--;
+    const progress = Math.min(100, Math.round(((20 - eyeRestRemainingSeconds) / 20) * 100));
+    if (eyeRestProgressBar) {
+      eyeRestProgressBar.style.width = `${progress}%`;
+    }
+    if (eyeRestSecondsCount) {
+      eyeRestSecondsCount.textContent = `${eyeRestRemainingSeconds}s`;
+    }
+
+    if (eyeRestRemainingSeconds <= 0) {
+      clearInterval(eyeRestInterval);
+      eyeRestInterval = null;
+      if (eyeRestProgressBar) eyeRestProgressBar.classList.add('done');
+      if (eyeRestSecondsCount) eyeRestSecondsCount.textContent = '✓';
+      if (eyeRestDescription) eyeRestDescription.textContent = '✅ Olhos lubrificados e relaxados! Excelente pausa.';
+      if (btnEyeRestConfirm) btnEyeRestConfirm.textContent = 'Concluído!';
+
+      const curMind = getCurrentDayMind();
+      curMind.eyeBreaksCount = (curMind.eyeBreaksCount || 0) + 1;
+      saveMindJournal();
+
+      setTimeout(() => {
+        dismissEyeRestToast(false);
+      }, 2500);
+    }
+  }, 1000);
+}
+
+function dismissEyeRestToast(isCompleted = false) {
+  if (eyeRestInterval) {
+    clearInterval(eyeRestInterval);
+    eyeRestInterval = null;
+  }
+  if (isCompleted) {
+    const curMind = getCurrentDayMind();
+    curMind.eyeBreaksCount = (curMind.eyeBreaksCount || 0) + 1;
+    saveMindJournal();
+  }
+  if (eyeRest20Toast) {
+    eyeRest20Toast.classList.add('hidden');
+  }
+  isEyeRestActive = false;
+}
+
 window.openWellnessConfigModal = openWellnessConfigModal;
 window.closeWellnessConfigModal = closeWellnessConfigModal;
 window.handleSaveWellnessConfig = handleSaveWellnessConfig;
 window.toggleTodayActivity = toggleTodayActivity;
 window.switchToWellnessTab = switchToWellnessTab;
 window.renderWellnessDashboard = renderWellnessDashboard;
+window.triggerEyeRest20 = triggerEyeRest20;
+window.dismissEyeRestToast = dismissEyeRestToast;
+window.toggleLifeTask = toggleLifeTask;
+window.toggleEmergencyWorkMode = toggleEmergencyWorkMode;
+window.openOffDayWorkConfirmModal = openOffDayWorkConfirmModal;
+window.closeOffDayWorkConfirmModal = closeOffDayWorkConfirmModal;
+window.confirmEmergencyWorkOverride = confirmEmergencyWorkOverride;
+window.focusLifeChecklist = focusLifeChecklist;
 
 // Configuração e Alteração da Duração da Tarefa
 function openTimerConfig(taskId, e) {
@@ -3822,9 +4060,16 @@ function startGlobalTicker() {
     // 2. Banner e contagem regressiva da tarefa em andamento
     const runningTask = tasks.find(t => t.isRunning);
     if (!runningTask) {
+      continuousFocusSeconds = 0;
       activeTimerBanner.classList.add('hidden');
       document.title = 'TaskFlow & Timer — Gerenciador de Tarefas';
       return;
+    }
+
+    continuousFocusSeconds++;
+    // A cada 20 minutos (1200 segundos) de tela ativa, dispara o Descanso Ocular (Regra 20-20-20)
+    if (continuousFocusSeconds > 0 && continuousFocusSeconds % 1200 === 0) {
+      triggerEyeRest20();
     }
 
     const remainingSecs = getTaskRemainingSeconds(runningTask);

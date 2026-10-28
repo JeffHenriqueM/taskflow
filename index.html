@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=3.0">
+  <link rel="stylesheet" href="styles.css?v=3.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -108,6 +108,9 @@
         <button type="button" class="btn btn-secondary btn-wellness-shortcut" id="btnOpenWellnessShortcut" onclick="switchToWellnessTab()" title="Abrir Dashboard Semanal de Bem-Estar e Rotina">
           📈 Dashboard Bem-Estar
         </button>
+        <button type="button" class="btn btn-secondary btn-eye-rest-btn" id="btnEyeRestManual" onclick="triggerEyeRest20(true)" title="Descanso Ocular de 20 segundos (Regra 20-20-20 para olhos vermelhos)">
+          👁️ Descanso 20s
+        </button>
       </div>
     </section>
 
@@ -167,6 +170,34 @@
     <main class="main-content">
       <!-- Today View (Daily Routine) -->
       <div id="todayView">
+        <!-- Radical Off-Day Mode (Ativado no dia oficial de folga ou por ativação voluntária) -->
+        <section id="offDayRadicalCard" class="off-day-radical-card hidden">
+          <div class="off-radical-header">
+            <div class="off-radical-title-group">
+              <span class="off-radical-icon">🏖️</span>
+              <div>
+                <h2>Modo Folga Ativado: Dia de Viver!</h2>
+                <p>O trabalho no computador está bloqueado hoje. Recarregue sua dopamina natural no mundo real.</p>
+              </div>
+            </div>
+            <div class="off-radical-actions">
+              <button type="button" class="btn btn-sm btn-outline-warning" id="btnToggleEmergencyWork" onclick="toggleEmergencyWorkMode()">
+                ⚠️ Liberar Trabalho de Emergência
+              </button>
+            </div>
+          </div>
+
+          <div class="life-checklist-container">
+            <div class="life-checklist-header">
+              <span class="life-checklist-title">🌴 Lista de Lazer & Vida Real de Hoje:</span>
+              <span class="life-checklist-progress" id="lifeChecklistProgress">0 de 7 aproveitados</span>
+            </div>
+            <div class="life-tasks-grid" id="lifeTasksGrid">
+              <!-- Renderizado dinamicamente via JS -->
+            </div>
+          </div>
+        </section>
+
         <!-- Form to add task -->
         <section class="task-form-card collapsed" id="taskFormCard">
           <div class="task-form-header" id="taskFormHeader" role="button" tabindex="0" title="Clique para expandir ou minimizar o formulário">
@@ -1168,7 +1199,53 @@
     </div>
   </div>
 
+  <!-- Modal: Confirmação de Trabalho em Dia de Folga -->
+  <div id="offDayWorkConfirmModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card" style="max-width: 480px; text-align: center;">
+      <div style="font-size: 42px; margin-bottom: 12px;">🚫🏖️</div>
+      <h2 style="color: #f59e0b; font-size: 20px; margin-bottom: 8px;">Atenção: Hoje é seu Dia de Folga!</h2>
+      <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin-bottom: 20px;">
+        Você tem forte tendência a ficar preso em telas e se esgotar no trabalho. Dias de folga existem para recarregar sua dopamina no mundo real (praia, futebol, descanso).
+        <br><br>
+        <strong>Tem certeza absoluta de que quer abrir exceção para trabalhar hoje?</strong>
+      </p>
+      <div class="modal-buttons-row" style="justify-content: center; gap: 12px;">
+        <button type="button" class="btn btn-primary" onclick="closeOffDayWorkConfirmModal(); focusLifeChecklist();">
+          🏖️ Não, vou curtir minha folga!
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="confirmEmergencyWorkOverride()">
+          ⚠️ Liberar trabalho mesmo assim
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast: Descanso Ocular 20-20-20 -->
+  <div id="eyeRest20Toast" class="eye-rest-toast hidden">
+    <div class="eye-rest-top-row">
+      <div class="eye-rest-title-col">
+        <span class="eye-rest-emoji">👁️</span>
+        <div>
+          <h4>Descanso Ocular (Regra 20-20-20)</h4>
+          <p id="eyeRestDescription">Olhe para um ponto distante a 6m (pela janela) e pisque 10 vezes devagar!</p>
+        </div>
+      </div>
+      <button type="button" class="eye-rest-close-btn" onclick="dismissEyeRestToast(false)" title="Fechar">&times;</button>
+    </div>
+    <div class="eye-rest-countdown-wrapper">
+      <div class="eye-rest-track">
+        <div id="eyeRestProgressBar" class="eye-rest-bar"></div>
+      </div>
+      <div class="eye-rest-bottom-row">
+        <span id="eyeRestSecondsCount" class="eye-rest-sec">20s</span>
+        <button type="button" class="btn btn-sm btn-eye-confirm" id="btnEyeRestConfirm" onclick="dismissEyeRestToast(true)">
+          Pisquei & Descansei ✓
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=3.0"></script>
+  <script src="app.js?v=3.1"></script>
 </body>
 </html>

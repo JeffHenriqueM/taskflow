@@ -38,7 +38,8 @@ Este arquivo serve como contexto contínuo e permanente para o assistente de IA 
 ## 4. Metas de Saúde & Condicionamento Físico
 - 🏃‍♂️ **Começar a correr:** Quer introduzir corrida na rotina (excelente para o fim de tarde pós-expediente para queimar a adrenalina residual do Venvanse e limpar a mente).
 - 💪 **Voltar a treinar em casa:** Deseja restabelecer a rotina de treinos em casa (treino funcional, calistenia, pesos ou flexões/barra), de forma realista e sem sobrecarga.
-- 🍽️ **Alimentação & Hidratação:** O Venvanse inibe drasticamente o apetite ao longo do dia. É crucial lembrá-lo de se hidratar e fazer refeições completas (especialmente almoço e jantar).
+- 🍽️ **Alimentação & Hidratação:** Beba muita água com consistência. *Nota importante:* Ele **não** esquece de comer; sente bastante fome durante o dia, então não necessita de alarmes invasivos de almoço.
+- 👁️ **Saúde Ocular & Fadiga Visual:** Tende a ficar com os olhos bem vermelhos e ressecados no final da tarde/noite (combinação de redução de piscamento pelo hiperfoco de telas + efeito simpático do Venvanse). Utiliza colírio lubrificante (*Systane*) e pratica a **Regra 20-20-20** (a cada 20 min olhar longe por 20s e piscar) para preservar a visão. Priorizar áudio em vez de telas quando estiver fazendo atividades manuais à noite.
 
 ---
 
