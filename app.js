@@ -329,6 +329,31 @@ const btnRerollRandomTask = document.getElementById('btnRerollRandomTask');
 const btnCloseRandomModal = document.getElementById('btnCloseRandomModal');
 let selectedRandomCategory = 'all';
 
+// Conselheiro Sincero & Pausa de Tela
+const btnAskCounselor = document.getElementById('btnAskCounselor');
+const counselorModal = document.getElementById('counselorModal');
+const counselorFatigueBanner = document.getElementById('counselorFatigueBanner');
+const counselorRecommendationBox = document.getElementById('counselorRecommendationBox');
+const btnCounselorStartTask = document.getElementById('btnCounselorStartTask');
+const btnCounselorScreenBreak = document.getElementById('btnCounselorScreenBreak');
+const btnCounselorNextOption = document.getElementById('btnCounselorNextOption');
+const taskImpactInput = document.getElementById('taskImpact');
+const editTaskImpactInput = document.getElementById('editTaskImpact');
+
+const screenBreakModal = document.getElementById('screenBreakModal');
+const screenBreakTimerDisplay = document.getElementById('screenBreakTimerDisplay');
+const screenBreakTipBox = document.getElementById('screenBreakTipBox');
+const btnScreenBreakPauseResume = document.getElementById('btnScreenBreakPauseResume');
+const btnScreenBreakAdd2Min = document.getElementById('btnScreenBreakAdd2Min');
+const btnScreenBreakDone = document.getElementById('btnScreenBreakDone');
+
+let currentCounselorCandidates = [];
+let currentCounselorIndex = 0;
+let currentCounselorChosenTaskId = null;
+let screenBreakInterval = null;
+let screenBreakRemainingSeconds = 300;
+let isScreenBreakPaused = false;
+
 // Modal de Edição de Tarefa Completa
 const editTaskModal = document.getElementById('editTaskModal');
 const editTaskForm = document.getElementById('editTaskForm');
@@ -912,6 +937,44 @@ function setupEventListeners() {
     });
   }
 
+  // Ações do Conselheiro Sincero
+  if (btnAskCounselor) {
+    btnAskCounselor.addEventListener('click', openCounselorModal);
+  }
+  if (btnCounselorStartTask) {
+    btnCounselorStartTask.addEventListener('click', handleCounselorStartTask);
+  }
+  if (btnCounselorScreenBreak) {
+    btnCounselorScreenBreak.addEventListener('click', () => {
+      closeCounselorModal();
+      openScreenBreakModal();
+    });
+  }
+  if (btnCounselorNextOption) {
+    btnCounselorNextOption.addEventListener('click', counselorNextOption);
+  }
+  if (counselorModal) {
+    counselorModal.addEventListener('click', (e) => {
+      if (e.target === counselorModal) closeCounselorModal();
+    });
+  }
+
+  // Ações da Pausa de Tela & Detox Mental
+  if (btnScreenBreakPauseResume) {
+    btnScreenBreakPauseResume.addEventListener('click', toggleScreenBreakPause);
+  }
+  if (btnScreenBreakAdd2Min) {
+    btnScreenBreakAdd2Min.addEventListener('click', () => addScreenBreakTime(2));
+  }
+  if (btnScreenBreakDone) {
+    btnScreenBreakDone.addEventListener('click', closeScreenBreakModal);
+  }
+  if (screenBreakModal) {
+    screenBreakModal.addEventListener('click', (e) => {
+      if (e.target === screenBreakModal) closeScreenBreakModal();
+    });
+  }
+
   // Listeners dos Modais de Edição de Tarefas e Subtarefas
   if (editTaskForm) {
     editTaskForm.addEventListener('submit', handleSaveEditTask);
@@ -1114,6 +1177,7 @@ function handleCreateTask(e) {
   const recurrence = taskRecurrenceSelect ? taskRecurrenceSelect.value : 'diaria';
   const dueDate = taskDueDateInput ? taskDueDateInput.value : '';
   const category = getSelectedCategory(taskCategoryInput, taskCategoryCustomInput);
+  const impact = taskImpactInput ? taskImpactInput.value : 'alavanca';
   const includeInAnalysis = taskIncludeInAnalysisCheckbox ? !!taskIncludeInAnalysisCheckbox.checked : false;
   const workLocation = taskWorkLocationInput ? taskWorkLocationInput.value.trim() : '';
 
@@ -1122,6 +1186,7 @@ function handleCreateTask(e) {
     title: title,
     category: category,
     priority: taskPrioritySelect.value || 'media',
+    impact: impact,
     recurrence: recurrence || 'diaria',
     dueDate: dueDate || null,
     includeInAnalysis: includeInAnalysis,
@@ -1746,6 +1811,376 @@ function highlightAndScrollToTask(taskId) {
     }
   }, 120);
 }
+
+// ==========================================
+// Conselheiro Sincero & Pausa de Tela (Anti-Burnout)
+// ==========================================
+
+function getSmartTaskImpact(task) {
+  if (task && task.impact) return task.impact;
+  const cat = ((task && task.category) || '').toLowerCase();
+  const prio = ((task && task.priority) || 'media').toLowerCase();
+  if (cat.includes('pessoal') || cat.includes('vida') || cat.includes('saúde') || cat.includes('saude')) {
+    return 'vida';
+  }
+  if (prio === 'alta' || prio === 'urgente' || cat.includes('empreendedor') || cat.includes('villamor') || cat.includes('artsivo')) {
+    return 'alavanca';
+  }
+  return 'operacional';
+}
+
+function formatImpactBadge(impact) {
+  const imp = impact || 'alavanca';
+  if (imp === 'alavanca') {
+    return `<span class="badge badge-impact badge-impact-alavanca" title="Alavanca: Gera resultado direto, destrava receita ou avanços estratégicos">🚀 Alavanca</span>`;
+  } else if (imp === 'vida') {
+    return `<span class="badge badge-impact badge-impact-vida" title="Vida & Equilíbrio: Saúde, autocuidado e descanso">🌱 Pessoal</span>`;
+  }
+  return `<span class="badge badge-impact badge-impact-operacional" title="Operacional: Manutenção necessária do dia a dia">⚡ Operacional</span>`;
+}
+
+function evaluateCounselorDiagnosis() {
+  const totalSecondsToday = tasks.reduce((acc, t) => acc + (t.elapsedSeconds || 0), 0);
+  const totalPomodorosToday = tasks.reduce((acc, t) => acc + (t.pomodoroCount || 0), 0);
+
+  let fatigueLevel = 'level-fresh';
+  let fatigueIcon = '🟢';
+  let headline = 'Mente Fresca & Alta Clareza';
+  let message = 'Você está em um ótimo momento de energia. Ataque a tarefa de maior resultado agora e não gaste sua energia matinal com detalhes secundários.';
+
+  if (totalSecondsToday >= 18000 || totalPomodorosToday >= 8) { // 5h+
+    fatigueLevel = 'level-high';
+    fatigueIcon = '🔴';
+    headline = 'Saturação Mental Elevada — Risco de Esgotamento';
+    message = 'Você já acumulou mais de 5 horas de foco na tela hoje. Insistir agora só gera cansaço e retrabalho. O conselho sincero: encerre o expediente ou faça uma pausa longa longe das telas antes de prosseguir.';
+  } else if (totalSecondsToday >= 9000 || totalPomodorosToday >= 4) { // 2.5h a 5h
+    fatigueLevel = 'level-moderate';
+    fatigueIcon = '🟡';
+    headline = 'Cansaço Moderado — Monitore seu Ritmo';
+    message = 'Você já dedicou um bom tempo de tela hoje. Mantenha blocos enxutos e lembre-se de piscar, beber água e olhar longe do monitor ao final de cada bloco.';
+  }
+
+  return {
+    totalSecondsToday,
+    totalPomodorosToday,
+    fatigueLevel,
+    fatigueIcon,
+    headline,
+    message
+  };
+}
+
+function calculateTaskCounselorScore(task, diagnosis) {
+  let score = 0;
+  const impact = getSmartTaskImpact(task);
+  const prio = (task.priority || 'media').toLowerCase();
+  const elapsed = task.elapsedSeconds || 0;
+  const isRunning = !!task.isRunning;
+
+  // Se já está rodando, ela deve ser mantida como foco imediato
+  if (isRunning) score += 120;
+
+  // Impacto
+  if (impact === 'alavanca') {
+    score += 50;
+  } else if (impact === 'operacional') {
+    score += 20;
+  } else if (impact === 'vida') {
+    if (diagnosis.fatigueLevel === 'level-high') {
+      score += 65;
+    } else {
+      score += 15;
+    }
+  }
+
+  // Prioridade
+  if (prio === 'urgente') score += 30;
+  else if (prio === 'alta') score += 20;
+  else if (prio === 'media') score += 10;
+
+  // Prazos
+  if (task.dueDate) {
+    const today = getTodayDateKey();
+    if (task.dueDate < today) score += 35; // atrasada!
+    else if (task.dueDate === today) score += 25; // vence hoje
+  }
+
+  // Procrastinação produtiva: se está marcada para análise mas nunca foi tocada hoje
+  if (task.includeInAnalysis && elapsed === 0) {
+    score += 18;
+  }
+
+  // Redução de fricção: já tem work location ou subtarefas
+  if (task.workLocation) score += 8;
+  if ((task.subtasks || []).some(st => !st.completed)) score += 6;
+
+  // Rabbit Hole Warning: Se já gastou mais de 2 horas hoje sem concluir
+  if (elapsed >= 7200 && !isRunning) {
+    score -= 15;
+  }
+
+  return score;
+}
+
+function generateCounselorReasoning(task, diagnosis) {
+  const impact = getSmartTaskImpact(task);
+  const prio = (task.priority || 'media').toLowerCase();
+  const elapsed = task.elapsedSeconds || 0;
+  const isRunning = !!task.isRunning;
+  const subtasks = task.subtasks || [];
+  const pendingSub = subtasks.filter(st => !st.completed);
+
+  let reasonTitle = 'Por que esta tarefa agora?';
+  let reasonText = '';
+  let nextStepText = '';
+
+  if (isRunning) {
+    reasonTitle = 'Você já tem um cronômetro rodando aqui!';
+    reasonText = 'Evite pular de tarefa em tarefa. Termine o bloco atual nesta pendência antes de pensar em qualquer outra coisa.';
+  } else if (elapsed >= 7200) {
+    reasonTitle = '⚠️ Atenção: Perfeccionismo ou Gargalo Detectado';
+    reasonText = `Você já dedicou ${formatReadableTime(elapsed)} nesta tarefa hoje. Cuidado para não cair na armadilha de polir infinitamente. Foque em fechar o escopo essencial nos próximos 25 minutos.`;
+  } else if (impact === 'alavanca') {
+    reasonTitle = '🚀 Alavanca Estratégica (Move o Ponteiro)';
+    reasonText = 'Fazer tarefas fáceis de manutenção te dá uma falsa sensação de produtividade, mas é esta tarefa que realmente gera resultado, receita ou destrava seu projeto.';
+  } else if (task.includeInAnalysis && elapsed === 0) {
+    reasonTitle = '🎯 Tarefa Estratégica que Está Sendo Adiada';
+    reasonText = 'Você marcou esta tarefa para análise, mas ainda não tocou nela hoje. Procrastinação disfarçada de ocupação acontece quando evitamos o que é difícil. Encare apenas 1 bloco de 25m agora.';
+  } else if (impact === 'vida') {
+    reasonTitle = '🌱 Equilíbrio & Saúde Mental';
+    reasonText = 'Trabalhar sem pausas destrói sua clareza e criatividade a médio prazo. Esta tarefa pessoal é essencial para renovar suas energias.';
+  } else {
+    reasonTitle = '⚡ Manutenção / Operação Necessária';
+    reasonText = 'Esta é a próxima pendência necessária do seu fluxo. Resolva de forma objetiva sem se demorar nos detalhes.';
+  }
+
+  // Próximo passo concreto
+  if (task.workLocation) {
+    nextStepText = `Você parou em: <strong>${escapeHtml(task.workLocation)}</strong>`;
+  } else if (pendingSub.length > 0) {
+    nextStepText = `Ataque a primeira subtarefa: <strong>${escapeHtml(pendingSub[0].title)}</strong>`;
+  } else {
+    nextStepText = `Abra o projeto e execute <strong>1 bloco único de 25m</strong> com foco total.`;
+  }
+
+  return { reasonTitle, reasonText, nextStepText };
+}
+
+function openCounselorModal() {
+  const pendingTasks = tasks.filter(t => !t.completed);
+  const diagnosis = evaluateCounselorDiagnosis();
+
+  // Renderiza o banner de fadiga
+  if (counselorFatigueBanner) {
+    counselorFatigueBanner.className = `counselor-fatigue-banner ${diagnosis.fatigueLevel}`;
+    counselorFatigueBanner.innerHTML = `
+      <div class="counselor-fatigue-icon">${diagnosis.fatigueIcon}</div>
+      <div class="counselor-fatigue-info">
+        <div class="counselor-fatigue-headline">
+          <span>${diagnosis.headline}</span>
+          <span class="counselor-fatigue-stat">⏱️ ${formatReadableTime(diagnosis.totalSecondsToday)} (${diagnosis.totalPomodorosToday} blocos)</span>
+        </div>
+        <div>${diagnosis.message}</div>
+      </div>
+    `;
+  }
+
+  if (pendingTasks.length === 0) {
+    currentCounselorCandidates = [];
+    currentCounselorIndex = 0;
+    currentCounselorChosenTaskId = null;
+    if (btnCounselorStartTask) btnCounselorStartTask.style.display = 'none';
+    if (btnCounselorNextOption) btnCounselorNextOption.style.display = 'none';
+
+    if (counselorRecommendationBox) {
+      counselorRecommendationBox.innerHTML = `
+        <div style="text-align: center; padding: 24px 16px;">
+          <div style="font-size: 42px; margin-bottom: 12px;">🎉</div>
+          <h3 style="font-size: 19px; color: #fff; margin-bottom: 8px;">Tudo Concluído por Hoje!</h3>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; max-width: 480px; margin: 0 auto 16px;">
+            Você já zerou todas as tarefas pendentes da sua rotina de hoje. 
+            <strong>Aviso sincero:</strong> Não invente tarefas de última hora só para continuar preso na tela. 
+            Desligue o computador, tome um ar, saia de casa ou faça algo por você mesmo sem culpa. O descanso de hoje é o que vai te dar clareza amanhã!
+          </p>
+        </div>
+      `;
+    }
+
+    if (counselorModal) counselorModal.classList.remove('hidden');
+    return;
+  }
+
+  // Ranquear candidatos por maior impacto e menor atrito
+  const scored = pendingTasks.map(t => ({
+    task: t,
+    score: calculateTaskCounselorScore(t, diagnosis)
+  })).sort((a, b) => b.score - a.score);
+
+  currentCounselorCandidates = scored.map(s => s.task);
+  currentCounselorIndex = 0;
+  renderCurrentCounselorCandidate(diagnosis);
+
+  if (counselorModal) counselorModal.classList.remove('hidden');
+}
+
+function renderCurrentCounselorCandidate(diagnosis) {
+  if (!currentCounselorCandidates || currentCounselorCandidates.length === 0) return;
+  const task = currentCounselorCandidates[currentCounselorIndex];
+  currentCounselorChosenTaskId = task.id;
+
+  if (btnCounselorStartTask) {
+    btnCounselorStartTask.style.display = 'inline-flex';
+    btnCounselorStartTask.textContent = `▶ Iniciar Foco Nesta Tarefa (${Math.round(getTaskTargetSeconds(task) / 60)}m)`;
+  }
+  if (btnCounselorNextOption) {
+    btnCounselorNextOption.style.display = currentCounselorCandidates.length > 1 ? 'inline-flex' : 'none';
+    btnCounselorNextOption.textContent = `🔄 Outra Opção (${currentCounselorIndex + 1}/${currentCounselorCandidates.length})`;
+  }
+
+  const { reasonTitle, reasonText, nextStepText } = generateCounselorReasoning(task, diagnosis || evaluateCounselorDiagnosis());
+  const targetMins = Math.round(getTaskTargetSeconds(task) / 60);
+  const dedicatedSecs = getTaskCurrentSeconds(task);
+  const subtasks = task.subtasks || [];
+  const completedSubs = subtasks.filter(s => s.completed).length;
+
+  if (counselorRecommendationBox) {
+    counselorRecommendationBox.innerHTML = `
+      <div class="counselor-task-card">
+        <div class="counselor-task-header">
+          <div>
+            <div class="counselor-task-title">${escapeHtml(task.title)}</div>
+            <div class="counselor-badges-row">
+              ${formatImpactBadge(getSmartTaskImpact(task))}
+              ${formatCategoryBadge(task.category)}
+              <span class="badge badge-priority-${task.priority || 'media'}">${formatPriorityLabel(task.priority || 'media')}</span>
+              <span class="badge" style="background: rgba(255,255,255,0.06); color: #e2e8f0;">⏱️ ${targetMins} min</span>
+              ${dedicatedSecs > 0 ? `<span class="badge badge-pomodoro">🍅 ${formatReadableTime(dedicatedSecs)} hoje</span>` : ''}
+              ${subtasks.length > 0 ? `<span class="badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1;">📋 ${completedSubs}/${subtasks.length} subtarefas</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        ${task.description ? `<p style="font-size: 13px; color: var(--text-muted); line-height: 1.4; margin: 0;">${escapeHtml(task.description)}</p>` : ''}
+
+        <div class="counselor-truth-box">
+          <strong>${reasonTitle}</strong>
+          ${reasonText}
+        </div>
+
+        <div class="counselor-next-step-box">
+          <span>🎯</span>
+          <div>${nextStepText}</div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function counselorNextOption() {
+  if (!currentCounselorCandidates || currentCounselorCandidates.length <= 1) return;
+  currentCounselorIndex = (currentCounselorIndex + 1) % currentCounselorCandidates.length;
+  renderCurrentCounselorCandidate();
+}
+
+function closeCounselorModal() {
+  if (counselorModal) counselorModal.classList.add('hidden');
+}
+
+function handleCounselorStartTask() {
+  if (!currentCounselorChosenTaskId) return;
+  const taskId = currentCounselorChosenTaskId;
+  closeCounselorModal();
+
+  // Se o filtro for completed, alterna para all para mostrar o card
+  if (activeFilter === 'completed') {
+    activeFilter = 'all';
+    filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === 'all'));
+    renderTasks();
+  }
+
+  // Inicia o timer da tarefa se não estiver rodando
+  const task = tasks.find(t => t.id === taskId);
+  if (task && !task.isRunning) {
+    startTimer(taskId);
+  }
+
+  highlightAndScrollToTaskCounselor(taskId);
+}
+
+function highlightAndScrollToTaskCounselor(taskId) {
+  setTimeout(() => {
+    const cardEl = document.getElementById(`task-card-${taskId}`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      cardEl.classList.remove('highlight-counselor');
+      void cardEl.offsetWidth;
+      cardEl.classList.add('highlight-counselor');
+      setTimeout(() => {
+        cardEl.classList.remove('highlight-counselor');
+      }, 3500);
+    }
+  }, 120);
+}
+
+// Pausa de Tela & Detox Mental
+function openScreenBreakModal() {
+  screenBreakRemainingSeconds = 300; // 5 minutos
+  isScreenBreakPaused = false;
+  updateScreenBreakDisplay();
+  if (btnScreenBreakPauseResume) btnScreenBreakPauseResume.textContent = 'Pausar';
+  
+  if (screenBreakModal) {
+    screenBreakModal.classList.remove('hidden');
+  }
+
+  clearInterval(screenBreakInterval);
+  screenBreakInterval = setInterval(() => {
+    if (!isScreenBreakPaused && screenBreakRemainingSeconds > 0) {
+      screenBreakRemainingSeconds--;
+      updateScreenBreakDisplay();
+      if (screenBreakRemainingSeconds === 0) {
+        clearInterval(screenBreakInterval);
+        playAlarmSound();
+        if (screenBreakTimerDisplay) {
+          screenBreakTimerDisplay.textContent = '00:00';
+        }
+        alert('🌿 Pausa de tela finalizada! Seus olhos e cérebro agradecem. Agora volte com calma.');
+      }
+    }
+  }, 1000);
+}
+
+function updateScreenBreakDisplay() {
+  if (!screenBreakTimerDisplay) return;
+  const mins = Math.floor(screenBreakRemainingSeconds / 60);
+  const secs = screenBreakRemainingSeconds % 60;
+  screenBreakTimerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function toggleScreenBreakPause() {
+  isScreenBreakPaused = !isScreenBreakPaused;
+  if (btnScreenBreakPauseResume) {
+    btnScreenBreakPauseResume.textContent = isScreenBreakPaused ? 'Continuar' : 'Pausar';
+  }
+}
+
+function addScreenBreakTime(minutes) {
+  screenBreakRemainingSeconds += (minutes || 2) * 60;
+  updateScreenBreakDisplay();
+}
+
+function closeScreenBreakModal() {
+  clearInterval(screenBreakInterval);
+  screenBreakInterval = null;
+  if (screenBreakModal) {
+    screenBreakModal.classList.add('hidden');
+  }
+}
+
+window.openCounselorModal = openCounselorModal;
+window.closeCounselorModal = closeCounselorModal;
+window.openScreenBreakModal = openScreenBreakModal;
+window.closeScreenBreakModal = closeScreenBreakModal;
 
 // Configuração e Alteração da Duração da Tarefa
 function openTimerConfig(taskId, e) {
@@ -2611,6 +3046,7 @@ function openEditTaskModal(taskId) {
     }
   }
   if (editTaskPrioritySelect) editTaskPrioritySelect.value = task.priority || 'media';
+  if (editTaskImpactInput) editTaskImpactInput.value = task.impact || getSmartTaskImpact(task);
   if (editTaskRecurrenceSelect) editTaskRecurrenceSelect.value = task.recurrence || 'diaria';
   if (editTaskDueDateInput) editTaskDueDateInput.value = task.dueDate || '';
   if (editTaskTimerMinutesInput) editTaskTimerMinutesInput.value = Math.round(getTaskTargetSeconds(task) / 60);
@@ -2713,6 +3149,9 @@ function handleSaveEditTask(e) {
   task.title = newTitle;
   task.category = getSelectedCategory(editTaskCategoryInput, editTaskCategoryCustomInput);
   task.priority = editTaskPrioritySelect.value || 'media';
+  if (editTaskImpactInput) {
+    task.impact = editTaskImpactInput.value || 'alavanca';
+  }
   task.recurrence = editTaskRecurrenceSelect.value || 'diaria';
   task.dueDate = editTaskDueDateInput.value || null;
   task.description = editTaskDescriptionInput.value.trim();
@@ -3064,6 +3503,7 @@ function renderTasks() {
                 </div>
               ` : '')}
               <div class="task-meta-tags">
+                ${formatImpactBadge(task.impact || getSmartTaskImpact(task))}
                 ${formatCategoryBadge(task.category)}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
@@ -4085,6 +4525,7 @@ function mapDbTaskToModel(row) {
     title: row.title,
     category: row.category || 'Geral',
     priority: row.priority || 'media',
+    impact: row.impact || (row.category === 'Pessoal' ? 'vida' : (row.priority === 'alta' ? 'alavanca' : 'operacional')),
     recurrence: row.recurrence || 'diaria',
     dueDate: row.due_date || null,
     includeInAnalysis: row.include_in_analysis !== undefined ? !!row.include_in_analysis : false,
@@ -4112,6 +4553,7 @@ function mapModelToDbTask(task) {
     title: task.title,
     category: task.category || 'Geral',
     priority: task.priority || 'media',
+    impact: task.impact || getSmartTaskImpact(task),
     recurrence: task.recurrence || 'diaria',
     due_date: task.dueDate || null,
     include_in_analysis: !!task.includeInAnalysis,
@@ -4145,13 +4587,14 @@ async function fetchFromSupabase() {
         // Banco no Supabase está vazio: envia as tarefas da rotina atual
         const rows = tasks.map(mapModelToDbTask);
         const { error: upsertErr } = await supabaseClient.from('tasks').upsert(rows);
-        if (upsertErr && (upsertErr.code === '42703' || upsertErr.code === 'PGRST204' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date') || upsertErr.message.includes('include_in_analysis') || upsertErr.message.includes('work_location'))))) {
+        if (upsertErr && (upsertErr.code === '42703' || upsertErr.code === 'PGRST204' || (upsertErr.message && (upsertErr.message.includes('recurrence') || upsertErr.message.includes('due_date') || upsertErr.message.includes('include_in_analysis') || upsertErr.message.includes('work_location') || upsertErr.message.includes('impact'))))) {
           const fallbackRows = rows.map(r => {
             const copy = { ...r };
             delete copy.recurrence;
             delete copy.due_date;
             delete copy.include_in_analysis;
             delete copy.work_location;
+            delete copy.impact;
             return copy;
           });
           await supabaseClient.from('tasks').upsert(fallbackRows);
@@ -4368,13 +4811,14 @@ async function dbUpsertTask(task) {
     const row = mapModelToDbTask(task);
     const { error } = await supabaseClient.from('tasks').upsert(row);
     if (error) {
-      if (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location')))) {
-        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date, include_in_analysis ou work_location criadas
+      if (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact')))) {
+        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date, include_in_analysis, work_location ou impact criadas
         const fallbackRow = { ...row };
         delete fallbackRow.recurrence;
         delete fallbackRow.due_date;
         delete fallbackRow.include_in_analysis;
         delete fallbackRow.work_location;
+        delete fallbackRow.impact;
         await supabaseClient.from('tasks').upsert(fallbackRow);
       } else {
         console.warn('Aviso ao sincronizar tarefa com Supabase:', error.message);
@@ -4410,13 +4854,14 @@ async function dbSyncAllTasks() {
     updateSyncStatus('syncing', 'Sincronizando...');
     const rows = tasks.map(mapModelToDbTask);
     const { error } = await supabaseClient.from('tasks').upsert(rows);
-    if (error && (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location'))))) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact'))))) {
       const fallbackRows = rows.map(r => {
         const copy = { ...r };
         delete copy.recurrence;
         delete copy.due_date;
         delete copy.include_in_analysis;
         delete copy.work_location;
+        delete copy.impact;
         return copy;
       });
       await supabaseClient.from('tasks').upsert(fallbackRows);

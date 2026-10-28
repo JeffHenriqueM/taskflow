@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=2.5">
+  <link rel="stylesheet" href="styles.css?v=2.6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -188,6 +188,14 @@
                 </select>
               </div>
               <div class="form-group">
+                <label for="taskImpact">Impacto no Resultado</label>
+                <select id="taskImpact" title="Classifique para o Conselheiro Sincero saber priorizar tarefas de alto resultado">
+                  <option value="alavanca" selected>🚀 Alavanca (Gera resultado real / Negócio)</option>
+                  <option value="operacional">⚡ Operacional (Manutenção necessária)</option>
+                  <option value="vida">🌱 Vida & Pessoal (Equilíbrio / Saúde)</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label for="taskDueDate">Data de Entrega / Prazo</label>
                 <input type="date" id="taskDueDate" title="Defina um prazo final opcional para esta tarefa">
               </div>
@@ -269,6 +277,9 @@
               <option value="due-date">📅 Prazo mais próximo</option>
             </select>
           </div>
+          <button type="button" id="btnAskCounselor" class="btn btn-counselor" title="Conselheiro Sincero: Descubra o que realmente traz resultado agora e controle seu cansaço mental">
+            <span class="counselor-sparkle-icon">🎯</span> O Que Fazer Agora?
+          </button>
           <div class="random-picker-group">
             <select id="randomCategorySelect" class="random-toolbar-select" title="Filtrar categoria para o sorteio aleatório">
               <option value="all">🎲 Todas as Categorias</option>
@@ -604,6 +615,14 @@
             </select>
           </div>
           <div class="form-group">
+            <label for="editTaskImpact">Impacto no Resultado</label>
+            <select id="editTaskImpact" title="Classifique para o Conselheiro Sincero saber priorizar tarefas de alto resultado">
+              <option value="alavanca">🚀 Alavanca (Gera resultado real / Negócio)</option>
+              <option value="operacional">⚡ Operacional (Manutenção necessária)</option>
+              <option value="vida">🌱 Vida & Pessoal (Equilíbrio / Saúde)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label for="editTaskDueDate">Data de Entrega / Prazo</label>
             <input type="date" id="editTaskDueDate">
           </div>
@@ -716,7 +735,72 @@
     </div>
   </div>
 
+  <!-- Modal do Conselheiro Sincero (O Que Fazer Agora?) -->
+  <div id="counselorModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card counselor-modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon counselor-badge-glow">🎯</span>
+          <div>
+            <h3>Conselheiro Sincero</h3>
+            <p class="modal-subtitle">Orientação direta focada em resultado real e controle de cansaço mental</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeCounselorModal()" title="Fechar">&times;</button>
+      </div>
+
+      <!-- Diagnóstico de Cansaço e Horas de Tela -->
+      <div id="counselorFatigueBanner" class="counselor-fatigue-banner">
+        <!-- Preenchido via JS -->
+      </div>
+
+      <!-- Card da Tarefa Recomendada de Maior Resultado -->
+      <div id="counselorRecommendationBox" class="counselor-recommendation-box">
+        <!-- Preenchido via JS -->
+      </div>
+
+      <!-- Ações do Conselheiro -->
+      <div class="modal-buttons-row counselor-buttons-row">
+        <button type="button" id="btnCounselorStartTask" class="btn btn-primary btn-counselor-focus">
+          ▶ Iniciar Foco Nesta Tarefa (25m)
+        </button>
+        <button type="button" id="btnCounselorScreenBreak" class="btn btn-warning btn-counselor-break" title="Descansar olhos e mente longe da tela">
+          ☕ Pausa de Tela (5m)
+        </button>
+        <button type="button" id="btnCounselorNextOption" class="btn btn-secondary" title="Ver outra opção sincera de tarefa">
+          🔄 Outra Opção
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="closeCounselorModal()">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Pausa de Tela & Detox Mental -->
+  <div id="screenBreakModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card screen-break-modal-card">
+      <div class="screen-break-zen-icon">🌿</div>
+      <h3 class="screen-break-title">Pausa de Tela & Respiração</h3>
+      <p class="screen-break-subtitle">
+        Seu cérebro e seus olhos precisam de descanso real. Afaste-se do monitor e evite olhar para o celular.
+      </p>
+
+      <div class="screen-break-timer-display" id="screenBreakTimerDisplay">05:00</div>
+
+      <div class="screen-break-tips-box" id="screenBreakTipBox">
+        💡 <strong>Regra 20-20-20:</strong> Olhe para um ponto distante (pela janela ou horizonte) por pelo menos 20 segundos. Levante-se, estique o corpo e beba um copo de água.
+      </div>
+
+      <div class="modal-buttons-row">
+        <button type="button" id="btnScreenBreakPauseResume" class="btn btn-secondary">Pausar</button>
+        <button type="button" id="btnScreenBreakAdd2Min" class="btn btn-secondary">+ 2 Minutos</button>
+        <button type="button" id="btnScreenBreakDone" class="btn btn-primary">Pronto, estou renovado</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=2.5"></script>
+  <script src="app.js?v=2.6"></script>
 </body>
 </html>
