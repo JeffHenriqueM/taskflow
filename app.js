@@ -2120,6 +2120,10 @@ function openCounselorModal(forceWorkTasks = false) {
 
   const isWinddownTime = (isPostVenvanseWindow || (isLateEvening && hoursSinceMed !== null && hoursSinceMed >= 8) || (isLateEvening && diagnosis.totalSecondsToday >= 14400) || isSeverelyFatigued);
 
+  const dayOfWeek = now.getDay(); // 0 = Domingo, 5 = Sexta, 6 = Sábado
+  const isWeekendNight = (dayOfWeek === 5 || dayOfWeek === 6);
+  const isSunday = (dayOfWeek === 0);
+
   if (isWinddownTime && !forceWorkTasks) {
     currentCounselorCandidates = [];
     currentCounselorIndex = 0;
@@ -2149,6 +2153,23 @@ function openCounselorModal(forceWorkTasks = false) {
         ? `Você tomou o Venvanse às <strong>${med.time}</strong> (já se passaram <strong>${hoursSinceMed ? hoursSinceMed.toFixed(1) : ''} horas</strong>!)`
         : `Agora já são <strong>${timeFormatted}</strong> da noite`;
 
+      let weekendCustomTip = '';
+      if (isWeekendNight) {
+        weekendCustomTip = `
+          <div class="winddown-item">
+            <span>🎮</span>
+            <div><strong>Noite de Balada / Lazer:</strong> Se hoje é o seu dia de sair no fim de semana, você não precisa trabalhar. Jogue um videogame para espantar o sono até a hora de sair e vá curtir sem peso na consciência!</div>
+          </div>
+        `;
+      } else if (isSunday) {
+        weekendCustomTip = `
+          <div class="winddown-item">
+            <span>🏖️</span>
+            <div><strong>Domingo de Folga & Vida Real:</strong> Praia, futebol, ar livre ou só pernas para o ar. Domingo não é dia de tela!</div>
+          </div>
+        `;
+      }
+
       counselorRecommendationBox.innerHTML = `
         <div class="counselor-winddown-card">
           <div class="counselor-winddown-header">
@@ -2173,15 +2194,16 @@ function openCounselorModal(forceWorkTasks = false) {
             </div>
             <div class="winddown-item">
               <span>🍽️</span>
-              <div><strong>Jantar / Refeição de Verdade:</strong> O Venvanse tira o apetite o dia todo. Seu corpo precisa de comida nutritiva e água agora.</div>
+              <div><strong>Jantar / Refeição de Verdade:</strong> O Venvanse tira o apetite o dia todo. Seu corpo precisa de calorias nutritivas e água agora.</div>
             </div>
             <div class="winddown-item">
               <span>🏃‍♂️</span>
-              <div><strong>Correr, Caminhar ou Treinar:</strong> Queime a adrenalina e a tensão de ter ficado sentado o dia todo. Sair de casa por 30 minutos vai resetar sua cabeça.</div>
+              <div><strong>Começar a Correr ou Treinar em Casa:</strong> Calce o tênis para uma corrida leve na rua (20-30m) ou faça uma série de treino em casa. Queime a adrenalina acumulada e resete a mente!</div>
             </div>
+            ${weekendCustomTip}
             <div class="winddown-item">
               <span>🚿</span>
-              <div><strong>Banho Morno & Desligar Telas:</strong> Feche o computador. Não substitua o PC pelo feed do celular no sofá.</div>
+              <div><strong>Banho Morno & Desligar Telas:</strong> Feche o computador. Não substitua o monitor pelo feed infinito do celular no sofá.</div>
             </div>
             <div class="winddown-item">
               <span>🛋️</span>
