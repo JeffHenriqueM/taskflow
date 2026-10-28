@@ -2075,9 +2075,26 @@ function generateCounselorReasoning(task, diagnosis) {
   return { reasonTitle, reasonText, nextStepText };
 }
 
-function openCounselorModal() {
+function openCounselorModal(forceWorkTasks = false) {
   const pendingTasks = tasks.filter(t => !t.completed);
   const diagnosis = evaluateCounselorDiagnosis();
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMin = now.getMinutes();
+  const timeFormatted = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
+  const currentMind = getCurrentDayMind();
+  const med = currentMind.medication || {};
+  const curve = diagnosis.curve;
+
+  // Restaura handlers padrão caso tenham sido modificados pelo modo winddown
+  if (btnCounselorStartTask) {
+    btnCounselorStartTask.onclick = handleCounselorStartTask;
+    btnCounselorStartTask.className = 'btn btn-primary btn-counselor-focus';
+  }
+  if (btnCounselorNextOption) {
+    btnCounselorNextOption.onclick = counselorNextOption;
+    btnCounselorNextOption.className = 'btn btn-secondary';
+  }
 
   // Renderiza o banner de fadiga
   if (counselorFatigueBanner) {
@@ -2092,6 +2109,91 @@ function openCounselorModal() {
         <div>${diagnosis.message}</div>
       </div>
     `;
+  }
+
+  // 1. Checagem Biológica de Fim de Expediente / Hora de Viver (Hard Stop)
+  // Se já passaram mais de 10h da dose do Venvanse, ou fim de tarde/noite (>= 17:30) com dose matinal
+  const hoursSinceMed = (curve && curve.hoursElapsed !== null && curve.hoursElapsed !== undefined) ? curve.hoursElapsed : null;
+  const isPostVenvanseWindow = hoursSinceMed !== null && hoursSinceMed >= 10;
+  const isLateEvening = currentHour >= 18 || (currentHour === 17 && currentMin >= 30);
+  const isSeverelyFatigued = diagnosis.totalSecondsToday >= 21600; // 6h+ de tela
+
+  const isWinddownTime = (isPostVenvanseWindow || (isLateEvening && hoursSinceMed !== null && hoursSinceMed >= 8) || (isLateEvening && diagnosis.totalSecondsToday >= 14400) || isSeverelyFatigued);
+
+  if (isWinddownTime && !forceWorkTasks) {
+    currentCounselorCandidates = [];
+    currentCounselorIndex = 0;
+    currentCounselorChosenTaskId = null;
+
+    if (btnCounselorStartTask) {
+      btnCounselorStartTask.style.display = 'inline-flex';
+      btnCounselorStartTask.className = 'btn btn-primary';
+      btnCounselorStartTask.textContent = '🌙 Encerrar Expediente & Descansar';
+      btnCounselorStartTask.onclick = () => {
+        closeCounselorModal();
+        handleCloseDay();
+      };
+    }
+
+    if (btnCounselorNextOption) {
+      btnCounselorNextOption.style.display = 'inline-flex';
+      btnCounselorNextOption.className = 'btn btn-secondary';
+      btnCounselorNextOption.textContent = '⚠️ Ver tarefas de trabalho mesmo assim';
+      btnCounselorNextOption.onclick = () => {
+        openCounselorModal(true);
+      };
+    }
+
+    if (counselorRecommendationBox) {
+      const medNotice = (med.taken && med.time)
+        ? `Você tomou o Venvanse às <strong>${med.time}</strong> (já se passaram <strong>${hoursSinceMed ? hoursSinceMed.toFixed(1) : ''} horas</strong>!)`
+        : `Agora já são <strong>${timeFormatted}</strong> da noite`;
+
+      counselorRecommendationBox.innerHTML = `
+        <div class="counselor-winddown-card">
+          <div class="counselor-winddown-header">
+            <span class="winddown-icon">🌅</span>
+            <div>
+              <h3 style="font-size: 19px; color: #fff; margin: 0 0 4px;">Expediente Encerrado: Hora de Viver!</h3>
+              <p style="font-size: 13px; color: #94a3b8; margin: 0;">${medNotice} • Seu dia de trabalho acabou por hoje.</p>
+            </div>
+          </div>
+
+          <div class="counselor-truth-box" style="border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.08); margin: 12px 0;">
+            <strong style="color: #fbbf24;">Diagnóstico Sincero da Sua Mente:</strong>
+            O efeito do seu remédio já encerrou e o tanque de dopamina do seu cérebro está vazio. 
+            Tentar forçar tarefas de código ou trabalho agora à noite é <strong>autossabotagem</strong>: você vai demorar o triplo do tempo, acumular frustração, piorar seu sono e acordar sem energia amanhã. 
+            <br><br>
+            <strong>Você NÃO deve fazer mais nenhuma tarefa de trabalho hoje.</strong>
+          </div>
+
+          <div class="winddown-checklist">
+            <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; margin-bottom: 4px;">
+              O que você REALMENTE deve fazer agora:
+            </div>
+            <div class="winddown-item">
+              <span>🍽️</span>
+              <div><strong>Jantar / Refeição de Verdade:</strong> O Venvanse tira o apetite o dia todo. Seu corpo precisa de comida nutritiva e água agora.</div>
+            </div>
+            <div class="winddown-item">
+              <span>🏃‍♂️</span>
+              <div><strong>Correr, Caminhar ou Treinar:</strong> Queime a adrenalina e a tensão de ter ficado sentado o dia todo. Sair de casa por 30 minutos vai resetar sua cabeça.</div>
+            </div>
+            <div class="winddown-item">
+              <span>🚿</span>
+              <div><strong>Banho Morno & Desligar Telas:</strong> Feche o computador. Não substitua o PC pelo feed do celular no sofá.</div>
+            </div>
+            <div class="winddown-item">
+              <span>🛋️</span>
+              <div><strong>Descansar Sem Culpa:</strong> Você começou cedo e já entregou seu dia. O descanso de hoje é o combustível da clareza de amanhã.</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (counselorModal) counselorModal.classList.remove('hidden');
+    return;
   }
 
   if (pendingTasks.length === 0) {
