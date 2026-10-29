@@ -2705,8 +2705,12 @@ function updateMindTrackerBar() {
   const checkins = currentMind.checkins || [];
   if (checkins.length > 0) {
     const latest = checkins[checkins.length - 1];
-    if (lblCurrentFeelingEmoji) lblCurrentFeelingEmoji.textContent = getFeelingEmoji(latest.feeling);
-    if (lblCurrentFeelingText) lblCurrentFeelingText.textContent = `${latest.feelingName || getFeelingName(latest.feeling)} (${latest.time})`;
+    const feelingsList = latest.feelings || (latest.feeling ? [latest.feeling] : ['calmo']);
+    const emojis = feelingsList.map(f => getFeelingEmoji(f)).join('');
+    const names = latest.feelingName || feelingsList.map(f => getFeelingName(f)).join(', ');
+
+    if (lblCurrentFeelingEmoji) lblCurrentFeelingEmoji.textContent = emojis || '🧠';
+    if (lblCurrentFeelingText) lblCurrentFeelingText.textContent = `${names} (${latest.time})`;
     if (lblCurrentBatteryMini) lblCurrentBatteryMini.textContent = `🔋 ${latest.battery}%`;
   } else {
     if (lblCurrentFeelingEmoji) lblCurrentFeelingEmoji.textContent = '🧠';
@@ -2725,23 +2729,39 @@ function updateMindTrackerBar() {
 }
 
 function getFeelingEmoji(key) {
+  if (Array.isArray(key)) {
+    return key.map(k => getFeelingEmoji(k)).join(' ');
+  }
   switch (key) {
-    case 'pico': return '🚀';
-    case 'calmo': return '🎯';
+    case 'acordando': return '🌅';
+    case 'calmo': return '🧘';
+    case 'produtivo': return '⚡';
+    case 'pico':
+    case 'hiperfoco': return '🚀';
+    case 'relaxado': return '🏖️';
     case 'ansioso': return '🌀';
     case 'queda': return '📉';
     case 'esgotado': return '🥱';
+    case 'focado': return '🎯';
     default: return '🧠';
   }
 }
 
 function getFeelingName(key) {
+  if (Array.isArray(key)) {
+    return key.map(k => getFeelingName(k)).join(', ');
+  }
   switch (key) {
-    case 'pico': return 'Hiperfocado / Pico';
-    case 'calmo': return 'Foco Calmo';
-    case 'ansioso': return 'Acelerado / Ansioso';
-    case 'queda': return 'Queda / Crash';
+    case 'acordando': return 'Acordando';
+    case 'calmo': return 'Calmo';
+    case 'produtivo': return 'Produtivo';
+    case 'pico':
+    case 'hiperfoco': return 'Hiperfocado';
+    case 'relaxado': return 'Relaxado';
+    case 'ansioso': return 'Ansioso';
+    case 'queda': return 'Queda';
     case 'esgotado': return 'Esgotado';
+    case 'focado': return 'Foco';
     default: return 'Check-in';
   }
 }
@@ -2834,6 +2854,17 @@ function openMoodCheckinModal() {
   renderTodayCheckinsHistory();
   if (checkinNoteInput) checkinNoteInput.value = '';
   selectCheckinBattery(100);
+
+  // Desmarca checkboxes anteriores para seleção limpa
+  const checkboxes = document.querySelectorAll('input[name="checkinFeeling"]');
+  checkboxes.forEach(cb => { cb.checked = false; });
+
+  // Sugere 'acordando' no início da manhã (< 08h), ou 'calmo'
+  const now = new Date();
+  const defaultVal = now.getHours() < 8 ? 'acordando' : 'calmo';
+  const defaultCb = document.querySelector(`input[name="checkinFeeling"][value="${defaultVal}"]`);
+  if (defaultCb) defaultCb.checked = true;
+
   if (moodCheckinModal) moodCheckinModal.classList.remove('hidden');
 }
 
@@ -2852,8 +2883,14 @@ function selectCheckinBattery(val) {
 function handleSaveMoodCheckin(e) {
   e.preventDefault();
   const currentMind = getCurrentDayMind();
-  const selectedRadio = document.querySelector('input[name="checkinFeeling"]:checked');
-  const feeling = selectedRadio ? selectedRadio.value : 'calmo';
+  
+  // Coleta todos os sentimentos marcados (múltipla escolha)
+  const checkedBoxes = Array.from(document.querySelectorAll('input[name="checkinFeeling"]:checked'));
+  const feelings = checkedBoxes.map(cb => cb.value);
+
+  const feelingsList = feelings.length > 0 ? feelings : ['calmo'];
+  const primaryFeeling = feelingsList[0];
+
   const battery = checkinBatteryValue ? Number(checkinBatteryValue.value) : 100;
   const note = checkinNoteInput ? checkinNoteInput.value.trim() : '';
 
@@ -2864,8 +2901,9 @@ function handleSaveMoodCheckin(e) {
     id: 'chk_' + Date.now(),
     timestamp: Date.now(),
     time: timeStr,
-    feeling: feeling,
-    feelingName: getFeelingName(feeling),
+    feeling: primaryFeeling,
+    feelings: feelingsList,
+    feelingName: feelingsList.map(f => getFeelingName(f)).join(', '),
     battery: battery,
     note: note
   };
@@ -2896,16 +2934,22 @@ function renderTodayCheckinsHistory() {
     <div style="font-size: 11px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase;">
       Check-ins de Hoje (${checkins.length})
     </div>
-    ${checkins.slice().reverse().map(c => `
-      <div class="today-checkin-item">
-        <div class="today-checkin-left">
-          <span class="today-checkin-time">${c.time}</span>
-          <span>${getFeelingEmoji(c.feeling)} <strong>${escapeHtml(c.feelingName || getFeelingName(c.feeling))}</strong></span>
-          ${c.note ? `<span style="color: var(--text-muted); font-style: italic;">"${escapeHtml(c.note)}"</span>` : ''}
+    ${checkins.slice().reverse().map(c => {
+      const feelingsList = c.feelings || (c.feeling ? [c.feeling] : ['calmo']);
+      const emojis = feelingsList.map(f => getFeelingEmoji(f)).join(' ');
+      const names = c.feelingName || feelingsList.map(f => getFeelingName(f)).join(', ');
+
+      return `
+        <div class="today-checkin-item">
+          <div class="today-checkin-left">
+            <span class="today-checkin-time">${c.time}</span>
+            <span>${emojis} <strong>${escapeHtml(names)}</strong></span>
+            ${c.note ? `<span style="color: var(--text-muted); font-style: italic;">"${escapeHtml(c.note)}"</span>` : ''}
+          </div>
+          <span style="font-size: 11px; color: #a7f3d0; font-family: ui-monospace, monospace;">🔋 ${c.battery}%</span>
         </div>
-        <span style="font-size: 11px; color: #a7f3d0; font-family: ui-monospace, monospace;">🔋 ${c.battery}%</span>
-      </div>
-    `).join('')}
+      `;
+    }).join('')}
   `;
 }
 
@@ -2976,11 +3020,16 @@ function renderHistoryMindStrip(mj) {
   if (checkins.length > 0) {
     checkinsHtml = `
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-        ${checkins.map(c => `
-          <span style="background: rgba(0,0,0,0.25); padding: 2px 8px; border-radius: 4px; font-size: 11px;">
-            ${c.time} ${getFeelingEmoji(c.feeling)} ${escapeHtml(c.feelingName || getFeelingName(c.feeling))} (${c.battery}%)
-          </span>
-        `).join('')}
+        ${checkins.map(c => {
+          const feelingsList = c.feelings || (c.feeling ? [c.feeling] : ['calmo']);
+          const emojis = feelingsList.map(f => getFeelingEmoji(f)).join(' ');
+          const names = c.feelingName || feelingsList.map(f => getFeelingName(f)).join(', ');
+          return `
+            <span style="background: rgba(0,0,0,0.25); padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+              ${c.time} ${emojis} ${escapeHtml(names)} (${c.battery}%)
+            </span>
+          `;
+        }).join('')}
       </div>
     `;
   }
@@ -3416,9 +3465,12 @@ function renderWellnessDashboard() {
       const feelingsHtml = (d.checkins && d.checkins.length > 0)
         ? `
           <div class="day-feelings-chips">
-            ${d.checkins.slice(0, 3).map(c => `
-              <span class="day-feeling-chip">${getFeelingEmoji(c.feeling)} ${escapeHtml(c.feelingName || getFeelingName(c.feeling))}</span>
-            `).join('')}
+            ${d.checkins.slice(0, 3).map(c => {
+              const feelingsList = c.feelings || (c.feeling ? [c.feeling] : ['calmo']);
+              const emojis = feelingsList.map(f => getFeelingEmoji(f)).join(' ');
+              const names = c.feelingName || feelingsList.map(f => getFeelingName(f)).join(', ');
+              return `<span class="day-feeling-chip">${emojis} ${escapeHtml(names)}</span>`;
+            }).join('')}
           </div>
         `
         : '';

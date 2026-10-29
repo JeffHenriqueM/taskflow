@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=3.1">
+  <link rel="stylesheet" href="styles.css?v=3.2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1026,42 +1026,66 @@
       </div>
 
       <form id="moodCheckinForm" onsubmit="handleSaveMoodCheckin(event)">
-        <label class="checkin-section-label">Como está sua mente e seu foco?</label>
+        <label class="checkin-section-label">Como está sua mente, corpo e energia agora? (Selecione 1 ou mais)</label>
         <div class="checkin-feelings-grid">
           <label class="feeling-option">
-            <input type="radio" name="checkinFeeling" value="pico" checked>
+            <input type="checkbox" name="checkinFeeling" value="acordando">
+            <div class="feeling-box">
+              <span class="feeling-emoji">🌅</span>
+              <span class="feeling-name">Acordando / Transição</span>
+              <span class="feeling-desc">Início do dia devagar, acordando o corpo</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="checkbox" name="checkinFeeling" value="calmo">
+            <div class="feeling-box">
+              <span class="feeling-emoji">🧘</span>
+              <span class="feeling-name">Calmo / Sereno</span>
+              <span class="feeling-desc">Mente tranquila, serena e sem ansiedade</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="checkbox" name="checkinFeeling" value="produtivo">
+            <div class="feeling-box">
+              <span class="feeling-emoji">⚡</span>
+              <span class="feeling-name">Produtivo / Disposto</span>
+              <span class="feeling-desc">Vontade de agir e fazer acontecer</span>
+            </div>
+          </label>
+          <label class="feeling-option">
+            <input type="checkbox" name="checkinFeeling" value="pico">
             <div class="feeling-box">
               <span class="feeling-emoji">🚀</span>
               <span class="feeling-name">Hiperfocado / Pico</span>
-              <span class="feeling-desc">No pique do remédio, querendo fazer tudo</span>
+              <span class="feeling-desc">No pique do remédio, foco acelerado</span>
             </div>
           </label>
           <label class="feeling-option">
-            <input type="radio" name="checkinFeeling" value="calmo">
+            <input type="checkbox" name="checkinFeeling" value="relaxado">
             <div class="feeling-box">
-              <span class="feeling-emoji">🎯</span>
-              <span class="feeling-name">Foco Calmo & Produtivo</span>
-              <span class="feeling-desc">Clareza mental sem ansiedade (estado ideal)</span>
+              <span class="feeling-emoji">🏖️</span>
+              <span class="feeling-name">Relaxado / Modo Vida</span>
+              <span class="feeling-desc">Descanso, folga ou lazer fora do trabalho</span>
             </div>
           </label>
           <label class="feeling-option">
-            <input type="radio" name="checkinFeeling" value="ansioso">
+            <input type="checkbox" name="checkinFeeling" value="ansioso">
             <div class="feeling-box">
               <span class="feeling-emoji">🌀</span>
               <span class="feeling-name">Acelerado / Ansioso</span>
-              <span class="feeling-desc">Acelerado demais ou pulando de aba em aba</span>
+              <span class="feeling-desc">Mente inquieta ou pulando de aba em aba</span>
             </div>
           </label>
           <label class="feeling-option">
-            <input type="radio" name="checkinFeeling" value="queda">
+            <input type="checkbox" name="checkinFeeling" value="queda">
             <div class="feeling-box">
               <span class="feeling-emoji">📉</span>
               <span class="feeling-name">Queda de Energia / Crash</span>
-              <span class="feeling-desc">Remédio perdendo efeito, desânimo ou lentidão</span>
+              <span class="feeling-desc">Remédio baixando, desânimo ou lentidão</span>
             </div>
           </label>
           <label class="feeling-option">
-            <input type="radio" name="checkinFeeling" value="esgotado">
+            <input type="checkbox" name="checkinFeeling" value="esgotado">
             <div class="feeling-box">
               <span class="feeling-emoji">🥱</span>
               <span class="feeling-name">Esgotado de Tela</span>
@@ -1246,6 +1270,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=3.1"></script>
+  <script src="app.js?v=3.2"></script>
 </body>
 </html>

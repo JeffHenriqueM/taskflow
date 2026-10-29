@@ -3720,7 +3720,8 @@ textarea {
   gap: 10px;
 }
 
-.feeling-option input[type="radio"] {
+.feeling-option input[type="radio"],
+.feeling-option input[type="checkbox"] {
   display: none;
 }
 
@@ -3728,12 +3729,33 @@ textarea {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  position: relative;
+}
+
+.feeling-box::after {
+  content: '✓';
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid var(--border-color);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.25;
+  transition: all 0.2s ease;
 }
 
 .feeling-box:hover {
@@ -3741,10 +3763,17 @@ textarea {
   background: var(--bg-tertiary);
 }
 
-.feeling-option input[type="radio"]:checked + .feeling-box {
+.feeling-option input:checked + .feeling-box {
   border-color: #8b5cf6;
-  background: rgba(139, 92, 246, 0.15);
-  box-shadow: 0 0 14px rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.16);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.35);
+}
+
+.feeling-option input:checked + .feeling-box::after {
+  opacity: 1;
+  background: #8b5cf6;
+  border-color: #a78bfa;
+  color: #ffffff;
 }
 
 .feeling-emoji {
