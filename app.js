@@ -1683,6 +1683,9 @@ function recordTaskWorkSession(task, startTs, endTs, durationSecs, sessionType =
   if (task.workSessions.length > 100) {
     task.workSessions = task.workSessions.slice(0, 100);
   }
+  try {
+    localStorage.setItem('taskflow_last_worked_task_id', task.id);
+  } catch (e) {}
 }
 
 function getTaskTimePattern(task) {
@@ -1871,6 +1874,9 @@ function pauseTimer(taskId) {
     }
     task.isRunning = false;
     task.timerStartedAt = null;
+    try {
+      localStorage.setItem('taskflow_last_worked_task_id', taskId);
+    } catch (e) {}
     saveTasks();
     render();
     dbUpsertTask(task);
@@ -2267,7 +2273,32 @@ function evaluateCounselorDiagnosis() {
   };
 }
 
-function calculateTaskCounselorScore(task, diagnosis) {
+function getLastWorkedTaskId() {
+  const stored = localStorage.getItem('taskflow_last_worked_task_id');
+  if (stored && tasks.some(t => t.id === stored)) return stored;
+
+  let latestEnd = 0;
+  let latestId = null;
+  tasks.forEach(t => {
+    if (Array.isArray(t.workSessions) && t.workSessions.length > 0) {
+      const s = t.workSessions[0];
+      if (s && s.end && s.end > latestEnd) {
+        latestEnd = s.end;
+        latestId = t.id;
+      }
+    }
+  });
+  if (latestId) return latestId;
+
+  // Se houver tarefas com tempo hoje, pega a de menor tempo recente ou única
+  const tasksWithTime = tasks.filter(t => (t.elapsedSeconds || 0) > 0);
+  if (tasksWithTime.length === 1) {
+    return tasksWithTime[0].id;
+  }
+  return null;
+}
+
+function calculateTaskCounselorScore(task, diagnosis, lastWorkedId = null, hasUnworkedPending = false) {
   let score = 0;
   const impact = getSmartTaskImpact(task);
   const prio = (task.priority || 'media').toLowerCase();
@@ -2310,6 +2341,19 @@ function calculateTaskCounselorScore(task, diagnosis) {
     else if (task.dueDate === today) score += 25; // vence hoje
   }
 
+  // Rodízio Inteligente & Distribuição de Foco:
+  // Se ainda existem outras pendências que NÃO receberam nenhum bloco hoje
+  if (hasUnworkedPending) {
+    if (elapsed === 0) {
+      score += 28; // Bônus significativo para ativar novas frentes de trabalho no dia
+    }
+    // Se esta foi a ÚLTIMA tarefa trabalhada e não está com timer rodando agora,
+    // aplica penalidade de alternância para dar vez às outras pendências
+    if (lastWorkedId && task.id === lastWorkedId && !isRunning && elapsed > 0) {
+      score -= 35; // Dá a vez para a próxima prioridade
+    }
+  }
+
   // Procrastinação produtiva: se está marcada para análise mas nunca foi tocada hoje
   if (task.includeInAnalysis && elapsed === 0) {
     score += 18;
@@ -2342,6 +2386,9 @@ function generateCounselorReasoning(task, diagnosis) {
   if (isRunning) {
     reasonTitle = 'Você já tem um cronômetro rodando aqui!';
     reasonText = 'Evite pular de tarefa em tarefa. Termine o bloco atual nesta pendência antes de pensar em qualquer outra coisa.';
+  } else if (diagnosis && diagnosis.hasUnworkedPending && elapsed === 0 && diagnosis.lastWorkedId) {
+    reasonTitle = '🎯 Rodízio Inteligente: Hora de Destravar Nova Frente';
+    reasonText = 'Você já dedicou um bloco na tarefa anterior hoje. Para manter suas frentes de trabalho equilibradas e não acumular pendências, ataque o primeiro bloco nesta tarefa agora!';
   } else if (diagnosis && diagnosis.curve && diagnosis.curve.status === 'peak' && impact === 'alavanca') {
     reasonTitle = '🚀 Janela de Ouro do Venvanse: Hora da Alavanca';
     reasonText = `Você está no pico biológico do remédio (${diagnosis.curve.hoursElapsed ? diagnosis.curve.hoursElapsed.toFixed(1) : ''}h pós-dose). Não desperdice essa neuroquímica em bobagens. Foque 1 bloco nesta alavanca e destrave seu projeto!`;
@@ -2545,10 +2592,15 @@ function openCounselorModal(forceWorkTasks = false) {
     return;
   }
 
-  // Ranquear candidatos por maior impacto e menor atrito
+  const lastWorkedTaskId = getLastWorkedTaskId();
+  const hasUnworkedPending = pendingTasks.some(t => (t.elapsedSeconds || 0) === 0);
+  diagnosis.lastWorkedId = lastWorkedTaskId;
+  diagnosis.hasUnworkedPending = hasUnworkedPending;
+
+  // Ranquear candidatos por maior impacto, rodízio e ativação de tarefas zeradas
   const scored = pendingTasks.map(t => ({
     task: t,
-    score: calculateTaskCounselorScore(t, diagnosis)
+    score: calculateTaskCounselorScore(t, diagnosis, lastWorkedTaskId, hasUnworkedPending)
   })).sort((a, b) => b.score - a.score);
 
   currentCounselorCandidates = scored.map(s => s.task);
@@ -3952,6 +4004,9 @@ function setTaskDuration(taskId, minutes) {
     task.blockElapsedSeconds = 0;
     task.isRunning = false;
     task.timerStartedAt = null;
+    try {
+      localStorage.setItem('taskflow_last_worked_task_id', taskId);
+    } catch (e) {}
     saveTasks();
     render();
     dbUpsertTask(task);
