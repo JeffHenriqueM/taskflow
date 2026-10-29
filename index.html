@@ -6,7 +6,7 @@
   <title>TaskFlow & Timer — Gerenciador de Tarefas</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏱️</text></svg>">
-  <link rel="stylesheet" href="styles.css?v=3.2">
+  <link rel="stylesheet" href="styles.css?v=3.3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -658,6 +658,11 @@
           <span>Marcar esta tarefa como <strong>Concluída</strong></span>
         </label>
 
+        <div class="form-group hidden" id="logTimeCompletionNoteRow" style="margin-top: 8px;">
+          <label for="logTimeCompletionNote" style="font-size: 12px; color: #cbd5e1;">📝 Observação da Conclusão (O que foi entregue?):</label>
+          <input type="text" id="logTimeCompletionNote" placeholder="Ex: Subi código, validei testes no mobile...">
+        </div>
+
         <div class="modal-buttons-row">
           <button type="submit" class="btn btn-primary">💾 Salvar Tempo</button>
           <button type="button" class="btn btn-secondary" onclick="closeLogTimeModal()">Cancelar</button>
@@ -775,6 +780,11 @@
         <div class="form-group">
           <label for="editTaskWorkLocation">📍 Onde estou trabalhando no projeto</label>
           <input type="text" id="editTaskWorkLocation" placeholder="Ex: Arquivo index.html linha 50, tela de login, branch feat-auth...">
+        </div>
+
+        <div class="form-group">
+          <label for="editTaskCompletionNote">📝 Observação da Conclusão (O que foi entregue?)</label>
+          <input type="text" id="editTaskCompletionNote" placeholder="Anotação de entrega ou resolução da tarefa...">
         </div>
 
         <div class="form-group form-checkbox-group">
@@ -1244,6 +1254,77 @@
     </div>
   </div>
 
+  <!-- Modal: Conclusão de Tarefa com Observação -->
+  <div id="taskCompletionModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card" style="max-width: 520px;">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">✅</span>
+          <div>
+            <h2 id="taskCompletionModalTitle">Concluir Tarefa</h2>
+            <p class="subtitle" id="taskCompletionTaskSubtitle">Tarefa: ...</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeTaskCompletionModal()" title="Fechar">&times;</button>
+      </div>
+
+      <div class="modal-body-section" style="padding: 16px 0 8px 0;">
+        <label for="taskCompletionNoteInput" class="form-label" style="font-weight: 600; color: #e2e8f0; margin-bottom: 8px; display: block;">
+          📝 O que foi entregue ou resolvido? <span style="font-weight: 400; color: #94a3b8; font-size: 12px;">(Opcional)</span>
+        </label>
+        <textarea 
+          id="taskCompletionNoteInput" 
+          rows="3" 
+          class="form-control" 
+          placeholder="Ex: Subi a versão em produção, validei testes no mobile..."
+          style="width: 100%; box-sizing: border-box; resize: vertical; border-radius: 8px; font-size: 13.5px; padding: 10px 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); color: #f8fafc;"
+        ></textarea>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <span style="font-size: 11.5px; color: #94a3b8;">Dica: Pressione Ctrl + Enter para salvar rápido</span>
+          <span id="taskCompletionTimeNotice" style="font-size: 11.5px; color: #38bdf8;">Horário: --:--</span>
+        </div>
+      </div>
+
+      <div class="modal-buttons-row" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeTaskCompletionModal()">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-ghost" id="btnTaskCompletionSkip" onclick="handleSaveTaskCompletion(false)" style="color: #94a3b8; border: 1px solid rgba(148,163,184,0.25);">
+          Apenas Concluir
+        </button>
+        <button type="button" class="btn btn-primary" id="btnTaskCompletionSave" onclick="handleSaveTaskCompletion(true)">
+          💾 Concluir com Observação
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Padrão de Horários & Histórico da Tarefa -->
+  <div id="taskScheduleModal" class="app-modal-overlay hidden">
+    <div class="app-modal-card" style="max-width: 640px;">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-badge-icon">⏰</span>
+          <div>
+            <h2>Padrão de Horários & Histórico</h2>
+            <p class="subtitle" id="taskScheduleTaskSubtitle">Tarefa: ...</p>
+          </div>
+        </div>
+        <button type="button" class="btn-modal-close" onclick="closeTaskScheduleModal()" title="Fechar">&times;</button>
+      </div>
+
+      <div id="taskScheduleModalBody" class="modal-body-section" style="padding: 14px 0 6px 0;">
+        <!-- Inserido dinamicamente via JS -->
+      </div>
+
+      <div class="modal-buttons-row" style="margin-top: 16px; display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeTaskScheduleModal()">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Floating Toast: Descanso Ocular 20-20-20 -->
   <div id="eyeRest20Toast" class="eye-rest-toast hidden">
     <div class="eye-rest-top-row">
@@ -1270,6 +1351,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=3.2"></script>
+  <script src="app.js?v=3.3"></script>
 </body>
 </html>

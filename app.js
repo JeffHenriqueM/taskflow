@@ -455,6 +455,7 @@ const editTaskTimerMinutesInput = document.getElementById('editTaskTimerMinutes'
 const editTaskElapsedMinutesInput = document.getElementById('editTaskElapsedMinutes');
 const editTaskDescriptionInput = document.getElementById('editTaskDescription');
 const editTaskWorkLocationInput = document.getElementById('editTaskWorkLocation');
+const editTaskCompletionNoteInput = document.getElementById('editTaskCompletionNote');
 const editTaskIncludeInAnalysisCheckbox = document.getElementById('editTaskIncludeInAnalysis');
 const editNewSubtaskInput = document.getElementById('editNewSubtaskInput');
 const editNewSubtaskRecurrenceSelect = document.getElementById('editNewSubtaskRecurrence');
@@ -483,8 +484,26 @@ const logTimeMinutesInput = document.getElementById('logTimeMinutes');
 const logTimePreviewTotal = document.getElementById('logTimePreviewTotal');
 const logTimePreviewBlocks = document.getElementById('logTimePreviewBlocks');
 const logTimeMarkCompleted = document.getElementById('logTimeMarkCompleted');
+const logTimeCompletionNote = document.getElementById('logTimeCompletionNote');
+const logTimeCompletionNoteRow = document.getElementById('logTimeCompletionNoteRow');
 const logTimeForm = document.getElementById('logTimeForm');
 
+// Modal de Conclusão de Tarefa com Observação (v3.3)
+const taskCompletionModal = document.getElementById('taskCompletionModal');
+const taskCompletionModalTitle = document.getElementById('taskCompletionModalTitle');
+const taskCompletionTaskSubtitle = document.getElementById('taskCompletionTaskSubtitle');
+const taskCompletionNoteInput = document.getElementById('taskCompletionNoteInput');
+const taskCompletionTimeNotice = document.getElementById('taskCompletionTimeNotice');
+const btnTaskCompletionSkip = document.getElementById('btnTaskCompletionSkip');
+const btnTaskCompletionSave = document.getElementById('btnTaskCompletionSave');
+
+// Modal de Padrão de Horários & Histórico (v3.3)
+const taskScheduleModal = document.getElementById('taskScheduleModal');
+const taskScheduleTaskSubtitle = document.getElementById('taskScheduleTaskSubtitle');
+const taskScheduleModalBody = document.getElementById('taskScheduleModalBody');
+
+let currentCompletingTaskId = null;
+let isEditingCompletionNote = false;
 let currentConfiguringTaskId = null;
 let currentFinishedTaskId = null;
 let currentFinishedSubtaskId = null;
@@ -804,6 +823,10 @@ function resetTasksForNewDay() {
     return {
       ...task,
       completed: keepCompleted ? true : false,
+      completionNote: keepCompleted ? (task.completionNote || '') : '',
+      completedAtTime: keepCompleted ? (task.completedAtTime || null) : null,
+      completedAt: keepCompleted ? (task.completedAt || null) : null,
+      workSessions: task.workSessions || [],
       elapsedSeconds: 0,
       blockElapsedSeconds: 0,
       pomodoroCount: 0,
@@ -1155,6 +1178,31 @@ function setupEventListeners() {
   if (logTimeModal) {
     logTimeModal.addEventListener('click', (e) => {
       if (e.target === logTimeModal) closeLogTimeModal();
+    });
+  }
+  if (taskCompletionModal) {
+    taskCompletionModal.addEventListener('click', (e) => {
+      if (e.target === taskCompletionModal) closeTaskCompletionModal();
+    });
+  }
+  if (taskScheduleModal) {
+    taskScheduleModal.addEventListener('click', (e) => {
+      if (e.target === taskScheduleModal) closeTaskScheduleModal();
+    });
+  }
+  if (taskCompletionNoteInput) {
+    taskCompletionNoteInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveTaskCompletion(true);
+      }
+    });
+  }
+  if (logTimeMarkCompleted) {
+    logTimeMarkCompleted.addEventListener('change', () => {
+      if (logTimeCompletionNoteRow) {
+        logTimeCompletionNoteRow.classList.toggle('hidden', !logTimeMarkCompleted.checked);
+      }
     });
   }
 
@@ -1600,6 +1648,127 @@ function getTaskCurrentSeconds(task) {
   return total;
 }
 
+// ==========================================
+// Rastreamento de Sessões e Padrões de Horários (v3.3)
+// ==========================================
+
+function recordTaskWorkSession(task, startTs, endTs, durationSecs, sessionType = 'timer') {
+  if (!task || !durationSecs || durationSecs < 20) return;
+
+  if (!Array.isArray(task.workSessions)) {
+    task.workSessions = [];
+  }
+
+  const startDate = new Date(startTs);
+  const endDate = new Date(endTs);
+  const pad = (n) => String(n).padStart(2, '0');
+  const startTimeStr = `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
+  const endTimeStr = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+  const dateKey = getTodayDateKey();
+
+  const session = {
+    id: 'ws_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    date: dateKey,
+    start: startTs,
+    end: endTs,
+    startTimeStr: startTimeStr,
+    endTimeStr: endTimeStr,
+    duration: durationSecs,
+    startHour: startDate.getHours(),
+    type: sessionType
+  };
+
+  task.workSessions.unshift(session);
+  // Limita histórico a 100 sessões recentes para eficiência de memória
+  if (task.workSessions.length > 100) {
+    task.workSessions = task.workSessions.slice(0, 100);
+  }
+}
+
+function getTaskTimePattern(task) {
+  const sessions = task && Array.isArray(task.workSessions) ? task.workSessions : [];
+  if (sessions.length === 0) {
+    return {
+      hasData: false,
+      totalSessions: 0,
+      totalSeconds: 0,
+      badgeText: 'Sem padrão',
+      dominantWindow: null,
+      dominantHour: null,
+      peakHour: 0,
+      peakHourMins: 0,
+      hourlyMinutes: new Array(24).fill(0),
+      summary: 'Nenhuma sessão registrada ainda'
+    };
+  }
+
+  const hourlyMinutes = new Array(24).fill(0);
+  let totalSeconds = 0;
+
+  const windows = {
+    earlyMorning: { key: 'earlyMorning', name: 'Manhã Cedo (05h–08h)', icon: '🌅', secs: 0, count: 0 },
+    morningPeak: { key: 'morningPeak', name: 'Pico da Manhã (08h–12h)', icon: '🚀', secs: 0, count: 0 },
+    earlyAfternoon: { key: 'earlyAfternoon', name: 'Início da Tarde (12h–15h)', icon: '☀️', secs: 0, count: 0 },
+    lateAfternoon: { key: 'lateAfternoon', name: 'Fim da Tarde (15h–18h)', icon: '☕', secs: 0, count: 0 },
+    night: { key: 'night', name: 'Noite (18h+)', icon: '🌙', secs: 0, count: 0 }
+  };
+
+  sessions.forEach(s => {
+    const dur = s.duration || 0;
+    totalSeconds += dur;
+    const h = (typeof s.startHour === 'number' && s.startHour >= 0 && s.startHour < 24)
+      ? s.startHour
+      : (s.start ? new Date(s.start).getHours() : 0);
+
+    hourlyMinutes[h] += Math.round(dur / 60);
+
+    if (h >= 5 && h < 8) {
+      windows.earlyMorning.secs += dur;
+      windows.earlyMorning.count++;
+    } else if (h >= 8 && h < 12) {
+      windows.morningPeak.secs += dur;
+      windows.morningPeak.count++;
+    } else if (h >= 12 && h < 15) {
+      windows.earlyAfternoon.secs += dur;
+      windows.earlyAfternoon.count++;
+    } else if (h >= 15 && h < 18) {
+      windows.lateAfternoon.secs += dur;
+      windows.lateAfternoon.count++;
+    } else {
+      windows.night.secs += dur;
+      windows.night.count++;
+    }
+  });
+
+  const windowList = Object.values(windows);
+  windowList.sort((a, b) => b.secs - a.secs);
+  const dominant = windowList[0];
+
+  let peakHour = 0;
+  let maxHourMins = 0;
+  for (let h = 0; h < 24; h++) {
+    if (hourlyMinutes[h] > maxHourMins) {
+      maxHourMins = hourlyMinutes[h];
+      peakHour = h;
+    }
+  }
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const shortWindow = dominant.name.replace(/\(.*?\)/, '').trim();
+
+  return {
+    hasData: true,
+    totalSessions: sessions.length,
+    totalSeconds: totalSeconds,
+    dominantWindow: dominant,
+    peakHour: peakHour,
+    peakHourMins: maxHourMins,
+    hourlyMinutes: hourlyMinutes,
+    badgeText: `${dominant.icon} ${shortWindow} (${pad(peakHour)}h)`,
+    fullBadgeText: `${dominant.icon} Habitual: ${dominant.name}`
+  };
+}
+
 // Controle do Timer (Blocos Pomodoro)
 function startTimer(taskId) {
   // Trava de Folga Radical: bloqueia início de trabalho em dias de descanso oficial
@@ -1618,6 +1787,9 @@ function startTimer(taskId) {
   tasks.forEach(t => {
     if (t.isRunning && t.id !== taskId) {
       const added = Math.max(0, Math.floor((now - t.timerStartedAt) / 1000));
+      if (added >= 20 && t.timerStartedAt) {
+        recordTaskWorkSession(t, t.timerStartedAt, now, added, 'timer');
+      }
       t.elapsedSeconds = (t.elapsedSeconds || 0) + added;
       t.blockElapsedSeconds = (t.blockElapsedSeconds || 0) + added;
       if (t.activeSubtaskId && t.subtasks) {
@@ -1686,6 +1858,9 @@ function pauseTimer(taskId) {
   if (task && task.isRunning) {
     const now = Date.now();
     const added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+    if (added >= 20 && task.timerStartedAt) {
+      recordTaskWorkSession(task, task.timerStartedAt, now, added, 'timer');
+    }
     task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
     task.blockElapsedSeconds = (task.blockElapsedSeconds || 0) + added;
     if (task.activeSubtaskId && task.subtasks) {
@@ -1711,6 +1886,14 @@ function resetTimer(taskId) {
       ? `\n\n(Seus ${pomodoros} bloco(s) já concluídos hoje e o tempo total trabalhado continuarão salvos).` 
       : '';
     if (confirm(`Deseja reiniciar a contagem do bloco atual da tarefa "${task.title}" para ${mins} minutos?${pomodoroNote}`)) {
+      if (task.isRunning && task.timerStartedAt) {
+        const now = Date.now();
+        const added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+        if (added >= 20) {
+          recordTaskWorkSession(task, task.timerStartedAt, now, added, 'timer');
+        }
+        task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
+      }
       task.blockElapsedSeconds = 0;
       task.isRunning = false;
       task.timerStartedAt = null;
@@ -3757,6 +3940,14 @@ function setTaskDuration(taskId, minutes) {
   if (isNaN(mins) || mins <= 0) return;
   const task = tasks.find(t => t.id === taskId);
   if (task) {
+    if (task.isRunning && task.timerStartedAt) {
+      const now = Date.now();
+      const added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+      if (added >= 20) {
+        recordTaskWorkSession(task, task.timerStartedAt, now, added, 'timer');
+      }
+      task.elapsedSeconds = (task.elapsedSeconds || 0) + added;
+    }
     task.targetSeconds = mins * 60;
     task.blockElapsedSeconds = 0;
     task.isRunning = false;
@@ -3806,6 +3997,12 @@ function openLogTimeModal(taskId, e) {
 
   if (logTimeMarkCompleted) {
     logTimeMarkCompleted.checked = !!task.completed;
+  }
+  if (logTimeCompletionNoteRow) {
+    logTimeCompletionNoteRow.classList.toggle('hidden', !task.completed);
+  }
+  if (logTimeCompletionNote) {
+    logTimeCompletionNote.value = task.completionNote || '';
   }
 
   updateLogTimePreview();
@@ -3895,6 +4092,11 @@ function handleSaveLogTime(e) {
   let finalSecs = 0;
   if (mode === 'add') {
     finalSecs = currentSecs + inputSecs;
+    if (inputSecs >= 60) {
+      const now = Date.now();
+      const startTs = now - (inputSecs * 1000);
+      recordTaskWorkSession(task, startTs, now, inputSecs, 'manual');
+    }
   } else {
     finalSecs = inputSecs;
   }
@@ -3907,6 +4109,13 @@ function handleSaveLogTime(e) {
 
   if (logTimeMarkCompleted && logTimeMarkCompleted.checked) {
     task.completed = true;
+    task.completedAt = task.completedAt || Date.now();
+    const pad = (n) => String(n).padStart(2, '0');
+    const d = new Date();
+    task.completedAtTime = task.completedAtTime || `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    if (logTimeCompletionNote && logTimeCompletionNote.value.trim()) {
+      task.completionNote = logTimeCompletionNote.value.trim();
+    }
   }
 
   saveTasks();
@@ -4044,6 +4253,9 @@ function finishCountdown(task) {
   let added = 0;
   if (task.timerStartedAt) {
     added = Math.max(0, Math.floor((now - task.timerStartedAt) / 1000));
+    if (added >= 20) {
+      recordTaskWorkSession(task, task.timerStartedAt, now, added, 'pomodoro');
+    }
   }
   task.isRunning = false;
   task.timerStartedAt = null;
@@ -4177,14 +4389,257 @@ function startGlobalTicker() {
 // Operações de Tarefas
 function toggleTaskCompletion(taskId) {
   const task = tasks.find(t => t.id === taskId);
-  if (task) {
-    task.completed = !task.completed;
-    if (task.completed && task.isRunning) {
-      pauseTimer(taskId);
-    }
+  if (!task) return;
+
+  if (task.completed) {
+    // Reabrir tarefa que estava concluída
+    task.completed = false;
     saveTasks();
     render();
     dbUpsertTask(task);
+  } else {
+    // Concluir tarefa pendente: pausa timer se estiver rodando para creditar tempo e sessão
+    if (task.isRunning) {
+      pauseTimer(taskId);
+    }
+    openTaskCompletionModal(taskId, false);
+  }
+}
+
+function openTaskCompletionModal(taskId, isEditing = false, event = null) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  currentCompletingTaskId = taskId;
+  isEditingCompletionNote = isEditing;
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  if (taskCompletionTaskSubtitle) {
+    taskCompletionTaskSubtitle.textContent = `Tarefa: "${task.title}"`;
+  }
+  if (taskCompletionTimeNotice) {
+    taskCompletionTimeNotice.textContent = `Horário: ${task.completedAtTime || timeStr}`;
+  }
+
+  if (isEditing) {
+    if (taskCompletionModalTitle) taskCompletionModalTitle.textContent = '✏️ Editar Observação da Conclusão';
+    if (taskCompletionNoteInput) taskCompletionNoteInput.value = task.completionNote || '';
+    if (btnTaskCompletionSkip) {
+      btnTaskCompletionSkip.textContent = '🗑️ Remover Observação';
+    }
+    if (btnTaskCompletionSave) {
+      btnTaskCompletionSave.textContent = '💾 Salvar Alteração';
+    }
+  } else {
+    if (taskCompletionModalTitle) taskCompletionModalTitle.textContent = '✅ Concluir Tarefa';
+    if (taskCompletionNoteInput) taskCompletionNoteInput.value = task.completionNote || '';
+    if (btnTaskCompletionSkip) {
+      btnTaskCompletionSkip.textContent = 'Apenas Concluir';
+    }
+    if (btnTaskCompletionSave) {
+      btnTaskCompletionSave.textContent = '💾 Concluir com Observação';
+    }
+  }
+
+  if (taskCompletionModal) {
+    taskCompletionModal.classList.remove('hidden');
+  }
+  setTimeout(() => {
+    if (taskCompletionNoteInput) {
+      taskCompletionNoteInput.focus();
+      taskCompletionNoteInput.select();
+    }
+  }, 80);
+}
+
+function closeTaskCompletionModal() {
+  if (taskCompletionModal) {
+    taskCompletionModal.classList.add('hidden');
+  }
+  currentCompletingTaskId = null;
+  isEditingCompletionNote = false;
+  render();
+}
+
+function handleSaveTaskCompletion(withNote = true) {
+  if (!currentCompletingTaskId) return;
+  const task = tasks.find(t => t.id === currentCompletingTaskId);
+  if (!task) {
+    closeTaskCompletionModal();
+    return;
+  }
+
+  const noteText = taskCompletionNoteInput ? taskCompletionNoteInput.value.trim() : '';
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  if (isEditingCompletionNote) {
+    task.completionNote = withNote ? noteText : '';
+  } else {
+    task.completed = true;
+    task.completedAt = Date.now();
+    task.completedAtTime = timeStr;
+    task.completionNote = withNote ? noteText : '';
+    if (task.isRunning) {
+      pauseTimer(task.id);
+    }
+  }
+
+  saveTasks();
+  render();
+  dbUpsertTask(task);
+  closeTaskCompletionModal();
+}
+
+function openTaskScheduleModal(taskId, event = null) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  if (taskScheduleTaskSubtitle) {
+    taskScheduleTaskSubtitle.textContent = `Tarefa: "${task.title}" (${task.category || 'Geral'})`;
+  }
+
+  const pattern = getTaskTimePattern(task);
+  const sessions = (task.workSessions || []).slice(0, 30);
+
+  let circadianFeedback = '';
+  if (!pattern.hasData) {
+    circadianFeedback = '💡 Ainda não há sessões suficientes registradas nesta tarefa. Use o cronômetro, Pomodoro ou adicione tempo manual para mapear seu padrão biológico!';
+  } else if (pattern.dominantWindow.key === 'morningPeak') {
+    circadianFeedback = '🚀 <strong>Excelente alinhamento cognitivo:</strong> Você executa esta tarefa no auge do efeito do Venvanse e clareza mental (08h–12h). Mantenha tarefas pesadas e estratégicas nesta janela!';
+  } else if (pattern.dominantWindow.key === 'earlyMorning') {
+    circadianFeedback = '🌅 <strong>Manhã Cedo (05h–08h):</strong> Executada logo após acordar ou tomar o remédio. Perfeita para planejamento sem interrupções.';
+  } else if (pattern.dominantWindow.key === 'earlyAfternoon') {
+    circadianFeedback = '☀️ <strong>Início da Tarde (12h–15h):</strong> Horário pós-almoço. Ideal para rotinas operacionais ou alinhamentos.';
+  } else if (pattern.dominantWindow.key === 'lateAfternoon') {
+    circadianFeedback = '☕ <strong>Fim da Tarde (15h–18h):</strong> Período de desaceleração e início de fadiga visual pós-remédio. Lembre-se do colírio Systane e da regra 20-20-20.';
+  } else {
+    circadianFeedback = '🌙 <strong>Período Noturno (18h+):</strong> Cuidado para não esticar tarefas cognitivas à noite, preservando seu horário de dormir cedo.';
+  }
+
+  const maxMins = Math.max(...pattern.hourlyMinutes, 15);
+  const pad = (n) => String(n).padStart(2, '0');
+
+  const barsHtml = pattern.hourlyMinutes.map((mins, h) => {
+    const pct = Math.min(100, Math.round((mins / maxMins) * 100));
+    const isPeak = pattern.hasData && h === pattern.peakHour && mins > 0;
+    const isGoldZone = (h >= 7 && h <= 11);
+    const hasActivity = mins > 0;
+    
+    let colClass = 'schedule-bar-col';
+    if (hasActivity) colClass += ' has-activity';
+    if (isPeak) colClass += ' peak-hour';
+    if (isGoldZone) colClass += ' gold-zone';
+
+    return `
+      <div class="${colClass}" title="${pad(h)}:00 às ${pad(h)}:59 — ${mins} min de foco">
+        ${mins > 0 ? `<span class="schedule-bar-val">${mins}m</span>` : ''}
+        <div class="schedule-bar-fill" style="height: ${Math.max(4, pct)}%;"></div>
+      </div>
+    `;
+  }).join('');
+
+  const labelsHtml = Array.from({ length: 24 }).map((_, h) => {
+    const isMajor = h % 3 === 0 || (pattern.hasData && h === pattern.peakHour);
+    const isPeak = pattern.hasData && h === pattern.peakHour && pattern.peakHourMins > 0;
+    return `
+      <div class="schedule-hour-label ${isPeak ? 'highlight' : ''}">
+        ${isMajor ? `${pad(h)}h` : '·'}
+      </div>
+    `;
+  }).join('');
+
+  let sessionsHtml = '';
+  if (sessions.length === 0) {
+    sessionsHtml = `
+      <div style="text-align: center; color: #94a3b8; font-size: 12px; padding: 16px 0;">
+        Nenhum bloco de foco registrado ainda nesta tarefa.
+      </div>
+    `;
+  } else {
+    sessionsHtml = sessions.map(s => {
+      const typeLabel = s.type === 'pomodoro' ? '🍅 Pomodoro' : (s.type === 'manual' ? '⏱️ Manual' : '▶️ Timer');
+      const durMinutes = Math.max(1, Math.round((s.duration || 0) / 60));
+      return `
+        <div class="schedule-session-row">
+          <div class="schedule-session-time">
+            <span>🕒 ${s.startTimeStr || '--:--'} → ${s.endTimeStr || '--:--'}</span>
+            <span style="font-weight: 400; color: #94a3b8; font-size: 11px;">(${s.date || 'Hoje'})</span>
+          </div>
+          <div class="schedule-session-meta">
+            <span class="schedule-session-badge">${typeLabel}</span>
+            <strong style="color: #38bdf8;">${durMinutes} min</strong>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const totalTimeStr = formatReadableTime(pattern.totalSeconds);
+
+  if (taskScheduleModalBody) {
+    taskScheduleModalBody.innerHTML = `
+      <div class="schedule-insight-card">
+        <div class="schedule-insight-top">
+          <div class="schedule-dominant-badge">
+            ${pattern.hasData ? pattern.dominantWindow.icon : '⏳'} 
+            ${pattern.hasData ? `Janela Habitual: ${pattern.dominantWindow.name}` : 'Sem Padrão Estabelecido'}
+          </div>
+          <div class="schedule-stats-pills">
+            <span>📊 ${pattern.totalSessions} ${pattern.totalSessions === 1 ? 'sessão' : 'sessões'}</span>
+            <span>⏱️ ${totalTimeStr}</span>
+            ${pattern.hasData && pattern.peakHourMins > 0 ? `<span>🔥 Pico: ${pad(pattern.peakHour)}:00 (${pattern.peakHourMins}m)</span>` : ''}
+          </div>
+        </div>
+        <div class="schedule-circadian-hint">
+          ${circadianFeedback}
+        </div>
+      </div>
+
+      <div class="schedule-chart-wrapper">
+        <div class="schedule-chart-title">
+          <span>Distribuição de Foco por Hora do Dia (00h às 23h)</span>
+          <div class="schedule-chart-legend">
+            <span class="legend-item"><span class="legend-dot gold"></span> 07h-11h Janela Ouro</span>
+            <span class="legend-item"><span class="legend-dot emerald"></span> Horário Pico</span>
+            <span class="legend-item"><span class="legend-dot blue"></span> Foco Ativo</span>
+          </div>
+        </div>
+        <div class="schedule-bars-container">
+          ${barsHtml}
+        </div>
+        <div class="schedule-hours-labels">
+          ${labelsHtml}
+        </div>
+      </div>
+
+      <div class="schedule-sessions-wrapper">
+        <div class="schedule-sessions-title">Histórico de Sessões Recentes (${sessions.length})</div>
+        ${sessionsHtml}
+      </div>
+    `;
+  }
+
+  if (taskScheduleModal) {
+    taskScheduleModal.classList.remove('hidden');
+  }
+}
+
+function closeTaskScheduleModal() {
+  if (taskScheduleModal) {
+    taskScheduleModal.classList.add('hidden');
   }
 }
 
@@ -4605,6 +5060,7 @@ function openEditTaskModal(taskId) {
   if (editTaskElapsedMinutesInput) editTaskElapsedMinutesInput.value = Math.round((task.elapsedSeconds || 0) / 60);
   if (editTaskDescriptionInput) editTaskDescriptionInput.value = task.description || '';
   if (editTaskWorkLocationInput) editTaskWorkLocationInput.value = task.workLocation || '';
+  if (editTaskCompletionNoteInput) editTaskCompletionNoteInput.value = task.completionNote || '';
   if (editTaskIncludeInAnalysisCheckbox) {
     editTaskIncludeInAnalysisCheckbox.checked = !!task.includeInAnalysis;
   }
@@ -4708,6 +5164,9 @@ function handleSaveEditTask(e) {
   task.dueDate = editTaskDueDateInput.value || null;
   task.description = editTaskDescriptionInput.value.trim();
   task.workLocation = editTaskWorkLocationInput ? editTaskWorkLocationInput.value.trim() : '';
+  if (editTaskCompletionNoteInput) {
+    task.completionNote = editTaskCompletionNoteInput.value.trim();
+  }
   if (editTaskIncludeInAnalysisCheckbox) {
     task.includeInAnalysis = !!editTaskIncludeInAnalysisCheckbox.checked;
   }
@@ -5055,12 +5514,48 @@ function renderTasks() {
                   <button type="button" class="btn-work-location-clear" onclick="clearWorkLocation('${task.id}', event)" title="Remover anotação">&times;</button>
                 </div>
               ` : '')}
+              ${task.completed ? `
+                <div class="task-completion-note-box" id="completion-note-box-${task.id}">
+                  <div class="completion-note-content" onclick="openTaskCompletionModal('${task.id}', true, event)" title="Clique para editar a observação de conclusão">
+                    <span class="completion-note-icon">📝</span>
+                    <span class="completion-note-label">Conclusão:</span>
+                    <span class="completion-note-text">${task.completionNote ? escapeHtml(task.completionNote) : '<em class="completion-note-empty">Nenhuma observação informada (clique para adicionar)</em>'}</span>
+                    ${task.completedAtTime ? `<span class="completion-note-time">• ${task.completedAtTime}</span>` : ''}
+                    <button type="button" class="btn-completion-edit" onclick="openTaskCompletionModal('${task.id}', true, event)" title="Editar observação da conclusão">✏️</button>
+                  </div>
+                </div>
+              ` : ''}
               <div class="task-meta-tags">
                 ${formatImpactBadge(task.impact || getSmartTaskImpact(task))}
                 ${formatCategoryBadge(task.category)}
                 <span class="badge badge-priority-${priorityKey}">${formatPriorityLabel(priorityKey)}</span>
                 ${formatRecurrenceBadge(task.recurrence || 'diaria')}
                 ${formatDueDateBadge(task.dueDate, task.completed)}
+                ${(() => {
+                  const pattern = getTaskTimePattern(task);
+                  if (pattern.hasData) {
+                    return `
+                      <button 
+                        type="button" 
+                        class="badge badge-schedule-pattern clickable" 
+                        onclick="openTaskScheduleModal('${task.id}', event)" 
+                        title="Padrão identificado: ${pattern.dominantWindow.name} • Pico às ${String(pattern.peakHour).padStart(2, '0')}h (${pattern.totalSessions} sessões). Clique para ver gráfico e histórico"
+                      >
+                        ${pattern.badgeText}
+                      </button>
+                    `;
+                  }
+                  return `
+                    <button 
+                      type="button" 
+                      class="badge badge-schedule-pattern-empty clickable" 
+                      onclick="openTaskScheduleModal('${task.id}', event)" 
+                      title="Ver distribuição de horários e histórico desta tarefa"
+                    >
+                      ⏰ Horários
+                    </button>
+                  `;
+                })()}
                 ${(!task.workLocation && editingWorkLocationTaskId !== task.id) ? `
                   <button 
                     type="button" 
@@ -5483,6 +5978,13 @@ function renderHistoryTaskItem(task, isDone) {
         <span class="history-task-mini-time">⏱️ ${timeStr}</span>
       </div>
       ${task.description ? `<p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${escapeHtml(task.description)}</p>` : ''}
+      ${task.completionNote ? `
+        <div class="history-task-completion-note">
+          <span class="history-note-tag">📝 Conclusão:</span>
+          <span class="history-note-text">${escapeHtml(task.completionNote)}</span>
+          ${task.completedAtTime ? `<span class="history-note-time">(${task.completedAtTime})</span>` : ''}
+        </div>
+      ` : ''}
       ${subtasks.length > 0 ? `
         <div class="history-task-mini-subtasks">
           <span>Subtarefas (${doneSub}/${subtasks.length} concluídas):</span>
@@ -6084,6 +6586,10 @@ function mapDbTaskToModel(row) {
     dueDate: row.due_date || null,
     includeInAnalysis: row.include_in_analysis !== undefined ? !!row.include_in_analysis : false,
     workLocation: row.work_location || (row.workLocation || ''),
+    completionNote: row.completion_note || row.completionNote || '',
+    completedAtTime: row.completed_at_time || row.completedAtTime || null,
+    completedAt: row.completed_at ? Number(row.completed_at) : (row.completedAt || null),
+    workSessions: Array.isArray(row.work_sessions) ? row.work_sessions : (Array.isArray(row.workSessions) ? row.workSessions : []),
     description: row.description || '',
     completed: !!row.completed,
     createdAt: row.created_at ? Number(row.created_at) : Date.now(),
@@ -6112,6 +6618,10 @@ function mapModelToDbTask(task) {
     due_date: task.dueDate || null,
     include_in_analysis: !!task.includeInAnalysis,
     work_location: task.workLocation || '',
+    completion_note: task.completionNote || '',
+    completed_at_time: task.completedAtTime || null,
+    completed_at: task.completedAt || null,
+    work_sessions: task.workSessions || [],
     description: task.description || '',
     completed: !!task.completed,
     created_at: task.createdAt || Date.now(),
@@ -6365,14 +6875,18 @@ async function dbUpsertTask(task) {
     const row = mapModelToDbTask(task);
     const { error } = await supabaseClient.from('tasks').upsert(row);
     if (error) {
-      if (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact')))) {
-        // Fallback caso a tabela ainda não tenha as colunas recurrence, due_date, include_in_analysis, work_location ou impact criadas
+      if (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact') || error.message.includes('completion_note') || error.message.includes('completed_at') || error.message.includes('work_sessions')))) {
+        // Fallback caso a tabela ainda não tenha as colunas extras criadas
         const fallbackRow = { ...row };
         delete fallbackRow.recurrence;
         delete fallbackRow.due_date;
         delete fallbackRow.include_in_analysis;
         delete fallbackRow.work_location;
         delete fallbackRow.impact;
+        delete fallbackRow.completion_note;
+        delete fallbackRow.completed_at_time;
+        delete fallbackRow.completed_at;
+        delete fallbackRow.work_sessions;
         await supabaseClient.from('tasks').upsert(fallbackRow);
       } else {
         console.warn('Aviso ao sincronizar tarefa com Supabase:', error.message);
@@ -6408,7 +6922,7 @@ async function dbSyncAllTasks() {
     updateSyncStatus('syncing', 'Sincronizando...');
     const rows = tasks.map(mapModelToDbTask);
     const { error } = await supabaseClient.from('tasks').upsert(rows);
-    if (error && (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact'))))) {
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || (error.message && (error.message.includes('recurrence') || error.message.includes('due_date') || error.message.includes('include_in_analysis') || error.message.includes('work_location') || error.message.includes('impact') || error.message.includes('completion_note') || error.message.includes('completed_at') || error.message.includes('work_sessions'))))) {
       const fallbackRows = rows.map(r => {
         const copy = { ...r };
         delete copy.recurrence;
@@ -6416,6 +6930,10 @@ async function dbSyncAllTasks() {
         delete copy.include_in_analysis;
         delete copy.work_location;
         delete copy.impact;
+        delete copy.completion_note;
+        delete copy.completed_at_time;
+        delete copy.completed_at;
+        delete copy.work_sessions;
         return copy;
       });
       await supabaseClient.from('tasks').upsert(fallbackRows);
@@ -6492,3 +7010,8 @@ window.cancelInlineWorkLocation = cancelInlineWorkLocation;
 window.clearWorkLocation = clearWorkLocation;
 window.startSubtaskTimer = startSubtaskTimer;
 window.pauseSubtaskTimer = pauseSubtaskTimer;
+window.openTaskCompletionModal = openTaskCompletionModal;
+window.closeTaskCompletionModal = closeTaskCompletionModal;
+window.handleSaveTaskCompletion = handleSaveTaskCompletion;
+window.openTaskScheduleModal = openTaskScheduleModal;
+window.closeTaskScheduleModal = closeTaskScheduleModal;

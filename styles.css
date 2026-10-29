@@ -5379,6 +5379,375 @@ textarea {
   color: var(--text-dim);
 }
 
+/* ==========================================================
+   Padrão de Horários & Badges de Janela de Foco (v3.3)
+   ========================================================== */
+
+.badge-schedule-pattern {
+  background: rgba(99, 102, 241, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.badge-schedule-pattern:hover {
+  background: rgba(99, 102, 241, 0.32);
+  border-color: #818cf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.badge-schedule-pattern-empty {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2.5px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.badge-schedule-pattern-empty:hover {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+/* Observação na Conclusão da Tarefa */
+.task-completion-note-box {
+  margin-top: 6px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.09);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 7px;
+  padding: 5px 10px;
+  transition: all 0.2s ease;
+}
+
+.task-completion-note-box:hover {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.completion-note-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #cbd5e1;
+  flex: 1;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.completion-note-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.completion-note-label {
+  font-weight: 700;
+  color: #34d399;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.completion-note-text {
+  color: #f1f5f9;
+  font-size: 12px;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.completion-note-empty {
+  color: #64748b;
+  font-style: italic;
+}
+
+.completion-note-time {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.btn-completion-edit {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  opacity: 0.7;
+}
+
+.task-completion-note-box:hover .btn-completion-edit {
+  opacity: 1;
+  color: #34d399;
+}
+
+.history-task-completion-note {
+  margin-top: 5px;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 2px solid #10b981;
+  border-radius: 0 4px 4px 0;
+  font-size: 11.5px;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.history-note-tag {
+  font-weight: 700;
+  color: #34d399;
+  font-size: 11px;
+}
+
+.history-note-text {
+  color: #f8fafc;
+}
+
+.history-note-time {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+/* Modal de Padrão de Horários & Gráfico 24h */
+.schedule-insight-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.schedule-insight-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schedule-dominant-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.22);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: #c7d2fe;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-stats-pills {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #cbd5e1;
+  flex-wrap: wrap;
+}
+
+.schedule-circadian-hint {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+}
+
+.schedule-chart-wrapper {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  padding: 14px 12px 10px 12px;
+  margin-bottom: 16px;
+}
+
+.schedule-chart-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schedule-chart-legend {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.gold { background: #f59e0b; }
+.legend-dot.emerald { background: #10b981; }
+.legend-dot.blue { background: #38bdf8; }
+
+.schedule-bars-container {
+  display: flex;
+  align-items: flex-end;
+  height: 110px;
+  gap: 3px;
+  padding-top: 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.schedule-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  position: relative;
+}
+
+.schedule-bar-fill {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: rgba(148, 163, 184, 0.15);
+  transition: height 0.3s ease, background-color 0.2s ease;
+}
+
+.schedule-bar-col.has-activity .schedule-bar-fill {
+  background: #38bdf8;
+}
+
+.schedule-bar-col.gold-zone.has-activity .schedule-bar-fill {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.schedule-bar-col.peak-hour .schedule-bar-fill {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%) !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.schedule-bar-val {
+  position: absolute;
+  top: -16px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.schedule-hours-labels {
+  display: flex;
+  margin-top: 6px;
+  gap: 3px;
+}
+
+.schedule-hour-label {
+  flex: 1;
+  text-align: center;
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.schedule-hour-label.highlight {
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.schedule-sessions-wrapper {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.schedule-sessions-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+
+.schedule-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.schedule-session-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.schedule-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+}
+
+.schedule-session-badge {
+  font-size: 10px;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+
 
 
 
